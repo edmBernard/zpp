@@ -19,7 +19,7 @@ const Margin = region_mod.Margin;
 // MARK: Loop Options
 // ============================================================================
 
-/// Options for Loop and Generate operations
+/// Options for Loop operations
 pub fn LoopOptions(comptime CoordType: ?type) type {
     return struct {
         need_coordinates: ?type = CoordType,
@@ -98,6 +98,72 @@ pub fn vectorLen(comptime T: type) comptime_int {
 pub fn ProcessReturnType(comptime process_fn: anytype) type {
     const fn_info = @typeInfo(@TypeOf(process_fn)).@"fn";
     return fn_info.return_type.?;
+}
+
+// ============================================================================
+// MARK: Generator Result
+// ============================================================================
+
+/// Generator result (no input source, just generates based on coordinates)
+/// Supports both single-channel (VecT) and multi-channel ([N]VecT) output.
+pub fn GeneratorResult(
+    comptime CoordT: type,
+    comptime ContextType: type,
+    comptime process_fn: anytype,
+    comptime vec_len: comptime_int,
+) type {
+    // Determine the output type from the process function's return type
+    return struct {
+        context: ContextType,
+        region: Region,
+
+        const Self = @This();
+
+        /// The output type of this generator (e.g., VecF32 or [3]VecF32)
+        pub const OutputType = ProcessReturnType(process_fn);
+
+        /// Number of elements processed per evalAt call
+        pub const vector_length = vec_len;
+
+        const iota = std.simd.iota(@typeInfo(CoordT).vector.child, vec_len);
+
+        pub inline fn evalAt(self: Self, x: i32, y: i32) OutputType {
+            const x_vec: CoordT = iota + CastScalarCoordToVector(CoordT, x);
+            const y_vec: CoordT = CastScalarCoordToVector(CoordT, y);
+            return process_fn(self.context, x_vec, y_vec);
+        }
+
+        pub fn getRegion(self: Self) Region {
+            return self.region;
+        }
+    };
+}
+
+inline fn CastScalarCoordToVector(comptime CoordT: type, value: i32) CoordT {
+    switch (@typeInfo(CoordT).vector.child) {
+        f32 => {
+            return @as(CoordT, @splat(@floatFromInt(value)));
+        },
+        u16, u8 => {
+            return @as(CoordT, @splat(@intCast(value)));
+        },
+        else => @compileError("CastScalarCoordToVector only supports f32, u16, u8 scalars"),
+    }
+}
+
+/// Create a generator (produces values from coordinates, no input)
+/// Supports both single-channel (VecT) and multi-channel ([N]VecT) output.
+/// The vector length is inferred from the VecT type.
+pub fn Generate(
+    comptime VecT: type,
+    region: Region,
+    context: anytype,
+    comptime process_fn: anytype,
+) GeneratorResult(VecT, @TypeOf(context), process_fn, @typeInfo(VecT).vector.len) {
+    return .{
+        .context = context,
+        .region = region,
+    };
 }
 
 // ============================================================================
@@ -227,72 +293,6 @@ pub fn Loop(
 
     return .{
         .source = source,
-        .context = context,
-        .region = region,
-    };
-}
-
-// ============================================================================
-// MARK: Generator Result
-// ============================================================================
-
-/// Generator result (no input source, just generates based on coordinates)
-/// Supports both single-channel (VecT) and multi-channel ([N]VecT) output.
-pub fn GeneratorResult(
-    comptime CoordT: type,
-    comptime ContextType: type,
-    comptime process_fn: anytype,
-    comptime vec_len: comptime_int,
-) type {
-    // Determine the output type from the process function's return type
-    return struct {
-        context: ContextType,
-        region: Region,
-
-        const Self = @This();
-
-        /// The output type of this generator (e.g., VecF32 or [3]VecF32)
-        pub const OutputType = ProcessReturnType(process_fn);
-
-        /// Number of elements processed per evalAt call
-        pub const vector_length = vec_len;
-
-        const iota = std.simd.iota(@typeInfo(CoordT).vector.child, vec_len);
-
-        pub inline fn evalAt(self: Self, x: i32, y: i32) OutputType {
-            const x_vec: CoordT = iota + CastScalarCoordToVector(CoordT, x);
-            const y_vec: CoordT = CastScalarCoordToVector(CoordT, y);
-            return process_fn(self.context, x_vec, y_vec);
-        }
-
-        pub fn getRegion(self: Self) Region {
-            return self.region;
-        }
-    };
-}
-
-inline fn CastScalarCoordToVector(comptime CoordT: type, value: i32) CoordT {
-    switch (@typeInfo(CoordT).vector.child) {
-        f32 => {
-            return @as(CoordT, @splat(@floatFromInt(value)));
-        },
-        u16, u8 => {
-            return @as(CoordT, @splat(@intCast(value)));
-        },
-        else => @compileError("CastScalarCoordToVector only supports f32, u16, u8 scalars"),
-    }
-}
-
-/// Create a generator (produces values from coordinates, no input)
-/// Supports both single-channel (VecT) and multi-channel ([N]VecT) output.
-/// The vector length is inferred from the VecT type.
-pub fn Generate(
-    comptime VecT: type,
-    region: Region,
-    context: anytype,
-    comptime process_fn: anytype,
-) GeneratorResult(VecT, @TypeOf(context), process_fn, @typeInfo(VecT).vector.len) {
-    return .{
         .context = context,
         .region = region,
     };
