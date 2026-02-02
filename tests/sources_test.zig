@@ -3,6 +3,14 @@
 const std = @import("std");
 const zpp = @import("zpp");
 
+/// Common SIMD vector types
+const f32x4 = @Vector(4, f32);
+const u16x4 = @Vector(4, u16);
+const u8x4 = @Vector(4, u8);
+
+const AllTypes = [_]type{ f32x4, u16x4, u8x4 };
+const AllScalarTypes = [_]type{ f32, u16, u8 };
+
 test "Padding policy edge behavior" {
     const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
 
@@ -27,7 +35,6 @@ test "Padding policy edge behavior" {
 
 test "readVec in-bounds SIMD load" {
     const region: zpp.Region = .{ .x = 0, .y = 0, .width = 8, .height = 2 };
-    const f32x4 = @Vector(4, f32);
 
     // Input: [[1,2,3,4,5,6,7,8], [9,10,11,12,13,14,15,16]]
     var input_data: [16]f32 = .{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
@@ -48,7 +55,6 @@ test "readVec in-bounds SIMD load" {
 
 test "readVec out-of-bounds with RepeatEdgePadding" {
     const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
-    const f32x4 = @Vector(4, f32);
 
     // Input: [[1,2,3,4], [5,6,7,8]]
     var input_data: [8]f32 = .{ 1, 2, 3, 4, 5, 6, 7, 8 };
@@ -73,7 +79,6 @@ test "readVec out-of-bounds with RepeatEdgePadding" {
 
 test "readVec out-of-bounds with ZeroPadding" {
     const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
-    const f32x4 = @Vector(4, f32);
 
     // Input: [[1,2,3,4], [5,6,7,8]]
     var input_data: [8]f32 = .{ 1, 2, 3, 4, 5, 6, 7, 8 };
@@ -98,7 +103,6 @@ test "readVec out-of-bounds with ZeroPadding" {
 
 test "readVec non-origin region" {
     const region: zpp.Region = .{ .x = 10, .y = 20, .width = 4, .height = 2 };
-    const f32x4 = @Vector(4, f32);
 
     // Input: [[1,2,3,4], [5,6,7,8]]
     var input_data: [8]f32 = .{ 1, 2, 3, 4, 5, 6, 7, 8 };

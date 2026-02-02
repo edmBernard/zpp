@@ -16,7 +16,7 @@ const zpp = @import("zpp");
 // MARK: SIMD Vector Configuration
 // ============================================================================
 
-pub const vec_len = zpp.default_vec_len;
+pub const vec_len = zpp.suggested_vec_len;
 pub const VecF32 = @Vector(vec_len, f32);
 pub const VecU8 = @Vector(vec_len, u8);
 

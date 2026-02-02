@@ -62,7 +62,7 @@ const std = @import("std");
 const zpp = @import("zpp");
 
 // Use platform-optimal vector length
-const vec_len = zpp.default_vec_len;
+const vec_len = zpp.suggested_vec_len;
 const VecF32 = @Vector(vec_len, f32);
 
 pub fn main() !void {

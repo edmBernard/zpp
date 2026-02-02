@@ -106,9 +106,9 @@ pub fn ProcessReturnType(comptime process_fn: anytype) type {
 
 /// Input accessor that provides neighborhood access for kernels.
 /// Supports configurable vector length and uses the source's padding policy.
-pub fn InputAccessor(comptime SrcType: type, comptime VecT: type) type {
+pub fn InputAccessor(comptime SourceType: type, comptime VecT: type) type {
     return struct {
-        source: SrcType,
+        source: SourceType,
         current_x: i32,
         current_y: i32,
 
@@ -120,10 +120,10 @@ pub fn InputAccessor(comptime SrcType: type, comptime VecT: type) type {
             const y = self.current_y + dy;
 
             // Check if source is a LoopResult (for expression trees) - has evalAt
-            if (@hasDecl(SrcType, "evalAt")) {
+            if (@hasDecl(SourceType, "evalAt")) {
                 // It's a LoopResult - call its eval function
                 return self.source.evalAt(x, y);
-            } else if (@hasDecl(SrcType, "readVec")) {
+            } else if (@hasDecl(SourceType, "readVec")) {
                 // Source is an InputSource with readVec method (vectorized SIMD read)
                 return self.source.readVec(VecT, x, y);
             } else {
@@ -145,34 +145,34 @@ pub fn InputAccessor(comptime SrcType: type, comptime VecT: type) type {
 /// Lazy loop result that can be chained or processed
 pub fn LoopResult(
     comptime VecT: type,
-    comptime SrcType: type,
-    comptime CtxType: type,
+    comptime SourceType: type,
+    comptime ContextType: type,
     comptime process_fn: anytype,
     comptime opts: DefaultLoopOptions,
 ) type {
     const has_coords = opts.need_coordinates != null;
-    const is_zip_source = isZipSourceType(SrcType);
-    const is_group_source = isGroupSourceType(SrcType);
+    const is_zip_source = isZipSourceType(SourceType);
+    const is_group_source = isGroupSourceType(SourceType);
 
     // VecT is the base vector type for the accessor
     const AccessorType = if (comptime is_zip_source)
-        zip_mod.ZipAccessor(SrcType, VecT)
+        zip_mod.ZipAccessor(SourceType, VecT)
     else if (comptime is_group_source)
-        group_mod.GroupAccessor(SrcType, VecT, SrcType.group_width, SrcType.group_height)
+        group_mod.GroupAccessor(SourceType, VecT, SourceType.group_width, SourceType.group_height)
     else
-        InputAccessor(SrcType, VecT);
+        InputAccessor(SourceType, VecT);
     const vec_len = @typeInfo(VecT).vector.len;
 
     // Get the actual return type from the process function
     const ReturnType = ProcessReturnType(process_fn);
 
     return struct {
-        source: SrcType,
-        context: CtxType,
+        source: SourceType,
+        context: ContextType,
         region: Region,
 
         // Marker to identify this as a LoopResult for expression trees
-        const source_type = SrcType;
+        const source_type = SourceType;
 
         /// The output type of evalAt (may be VecT, [N]VecT, or tuple)
         pub const OutputType = ReturnType;
@@ -194,8 +194,8 @@ pub fn LoopResult(
                 const CoordT = opts.need_coordinates.?;
                 const CoordElemT = @typeInfo(CoordT).vector.child;
                 const iota = std.simd.iota(CoordElemT, vec_len);
-                const x_coords: CoordT = iota + @as(CoordT, @splat(@intCast(x)));
-                const y_coords: CoordT = @splat(@intCast(y));
+                const x_coords: CoordT = iota + CastScalarCoordToVector(CoordT, x);
+                const y_coords: CoordT = CastScalarCoordToVector(CoordT, y);
                 return process_fn(self.context, accessor, x_coords, y_coords);
             } else {
                 return process_fn(self.context, accessor);
@@ -216,11 +216,11 @@ pub fn Loop(
     context: anytype,
     comptime process_fn: anytype,
 ) LoopResult(VecT, @TypeOf(source), @TypeOf(context), process_fn, opts) {
-    const SrcType = @TypeOf(source);
+    const SourceType = @TypeOf(source);
 
-    const region = if (@hasDecl(SrcType, "getRegion"))
+    const region = if (@hasDecl(SourceType, "getRegion"))
         source.getRegion()
-    else if (@hasField(SrcType, "region"))
+    else if (@hasField(SourceType, "region"))
         source.region
     else
         @compileError("Source must have a region field or getRegion method");
@@ -239,34 +239,29 @@ pub fn Loop(
 /// Generator result (no input source, just generates based on coordinates)
 /// Supports both single-channel (VecT) and multi-channel ([N]VecT) output.
 pub fn GeneratorResult(
-    comptime VecT: type,
-    comptime CtxType: type,
+    comptime CoordT: type,
+    comptime ContextType: type,
     comptime process_fn: anytype,
     comptime vec_len: comptime_int,
 ) type {
     // Determine the output type from the process function's return type
-    const OutputType = ProcessReturnType(process_fn);
-
     return struct {
-        context: CtxType,
+        context: ContextType,
         region: Region,
 
         const Self = @This();
 
         /// The output type of this generator (e.g., VecF32 or [3]VecF32)
-        pub const output_type = OutputType;
-
-        /// The vector type used for coordinates
-        pub const coord_vec_type = VecT;
+        pub const OutputType = ProcessReturnType(process_fn);
 
         /// Number of elements processed per evalAt call
         pub const vector_length = vec_len;
 
-        const iota = std.simd.iota(f32, vec_len);
+        const iota = std.simd.iota(@typeInfo(CoordT).vector.child, vec_len);
 
         pub inline fn evalAt(self: Self, x: i32, y: i32) OutputType {
-            const x_vec: VecT = iota + @as(VecT, @splat(@floatFromInt(x)));
-            const y_vec: VecT = @splat(@floatFromInt(y));
+            const x_vec: CoordT = iota + CastScalarCoordToVector(CoordT, x);
+            const y_vec: CoordT = CastScalarCoordToVector(CoordT, y);
             return process_fn(self.context, x_vec, y_vec);
         }
 
@@ -274,6 +269,18 @@ pub fn GeneratorResult(
             return self.region;
         }
     };
+}
+
+inline fn CastScalarCoordToVector(comptime CoordT: type, value: i32) CoordT {
+    switch (@typeInfo(CoordT).vector.child) {
+        f32 => {
+            return @as(CoordT, @splat(@floatFromInt(value)));
+        },
+        u16, u8 => {
+            return @as(CoordT, @splat(@intCast(value)));
+        },
+        else => @compileError("CastScalarCoordToVector only supports f32, u16, u8 scalars"),
+    }
 }
 
 /// Create a generator (produces values from coordinates, no input)
@@ -295,6 +302,24 @@ pub fn Generate(
 // MARK: Process
 // ============================================================================
 
+/// Get compatible vector length.
+/// In case of conversion the length must accommodate both source and destination.
+fn getCompatibleVectorLen(comptime SourceType: type, comptime DestType: type) comptime_int {
+    const suggested_source_len = std.simd.suggestVectorLength(SourceType.InnerT) orelse 1;
+    const suggested_dest_len = std.simd.suggestVectorLength(DestType.InnerT) orelse 1;
+    return @max(suggested_source_len, suggested_dest_len);
+}
+
+/// Get vector length from a source type.
+/// Returns the source's vector_length if it has one, otherwise returns 4
+/// (a conservative default for direct Process calls).
+fn getSourceVecLen(comptime SourceType: type) ?comptime_int {
+    if (@hasDecl(SourceType, "vector_length")) {
+        return SourceType.vector_length;
+    }
+    return null;
+}
+
 /// Execute the processing pipeline and write results to output.
 /// Supports both single-channel and multi-channel sources.
 /// The destination region drives what gets computed (pull model).
@@ -302,11 +327,11 @@ pub fn Generate(
 pub fn Process(source: anytype, dest: anytype) void {
     const region = dest.region;
     const SourceType = @TypeOf(source);
-
-    // Determine vector length - check for generator metadata or default to 4
-    const vec_len = SourceType.vector_length;
-
     const DestType = @TypeOf(dest);
+
+    // Determine vector length from Source or from Source and Destination
+    const vec_len = getSourceVecLen(SourceType) orelse getCompatibleVectorLen(SourceType, DestType);
+
     // Check if destination supports idempotent/overlapping writes (e.g., pixel buffers)
     // Accumulators like Stats do not support this and must use scalar remainder handling
     const supports_overlapping_writes = @hasDecl(DestType, "supports_overlapping_writes") and DestType.supports_overlapping_writes;

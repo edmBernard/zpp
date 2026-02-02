@@ -81,6 +81,7 @@ pub fn tupleLen(comptime TupleType: type) comptime_int {
     return @typeInfo(TupleType).@"struct".fields.len;
 }
 
+// TODO: add a proper member to source/dest types ?
 /// Helper to detect if a type is a ZipSource
 pub fn isZipSourceType(comptime T: type) bool {
     return @hasDecl(T, "count") and @hasField(T, "sources") and @hasField(T, "region") and @hasDecl(T, "Sources");
@@ -396,4 +397,3 @@ pub fn ZipAccessor(comptime SrcType: type, comptime VecT: type) type {
         }
     };
 }
-

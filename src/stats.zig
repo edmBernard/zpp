@@ -17,16 +17,17 @@ const Region = region_mod.Region;
 /// statistics into a context structure.
 pub fn StatsDest(
     comptime VecT: type,
-    comptime CtxType: type,
+    comptime ContextType: type,
     comptime stats_fn: anytype,
     comptime has_coords: bool,
 ) type {
     const vec_len = @typeInfo(VecT).vector.len;
 
     return struct {
-        context: *CtxType,
+        context: *ContextType,
         region: Region,
 
+        pub const InputType = @typeInfo(VecT).vector.child;
         const Self = @This();
 
         /// "Write" a SIMD batch by calling the stats function

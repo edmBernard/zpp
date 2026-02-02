@@ -2,66 +2,92 @@
 
 const std = @import("std");
 const zpp = @import("zpp");
+const th = @import("test_helpers.zig");
 
 /// Common SIMD vector types
 const f32x4 = @Vector(4, f32);
 const u16x4 = @Vector(4, u16);
+const u8x4 = @Vector(4, u8);
 
-test "basic generator" {
-    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 1 };
+const AllTypes = [_]type{ f32x4, u16x4, u8x4 };
+const AllScalarTypes = [_]type{ f32, u16, u8 };
 
-    var output: [4]f32 = .{ 0, 0, 0, 0 };
+// MARK: Loop: produce correct type accessor
+test "Loop: produce correct type accessor" {
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 2, .height = 2 };
 
-    const destination = zpp.Out(f32, &output, region.width, region);
+    inline for (AllTypes) |LoopType| {
+        const ScalarType = @typeInfo(LoopType).vector.child;
 
-    const processing_kernel = struct {
-        const Context = struct {
-            scale: f32x4 = f32x4{ 1.0, 1.0, 1.0, 1.0 },
-            offset: f32x4 = f32x4{ 1.0, 1.0, 1.0, 1.0 },
+        var input_data: [4]ScalarType = .{ 1.0, 2.0, 3.0, 4.0 };
+        const source = zpp.In(ScalarType, &input_data, region.width, region);
+
+        var output: [4]ScalarType = .{ 0, 0, 0, 0 };
+        const destination = zpp.Out(ScalarType, &output, region.width, region);
+
+        const processing_kernel = struct {
+            fn process(ctx: anytype, in: anytype) LoopType {
+                _ = ctx;
+                const value = in.get();
+                const VecType = @TypeOf(value);
+                if (VecType != LoopType) {
+                    @compileError("Expected coordinate vectors to match LoopType");
+                }
+                return value * zpp.splat(VecType, 10);
+            }
         };
 
-        fn process(ctx: Context, x: f32x4, y: f32x4) f32x4 {
-            return x / ctx.scale + y / ctx.scale + ctx.offset;
-        }
-    };
+        const result = zpp.Loop(LoopType, .{}, source, .{}, processing_kernel.process);
+        zpp.Process(result, destination);
 
-    const ctx = processing_kernel.Context{};
-    const result = zpp.Generate(f32x4, region, ctx, processing_kernel.process);
-    zpp.Process(result, destination);
-
-    // x=0,y=0 -> 0+0+1=1, x=1,y=0 -> 1+0+1=2, etc.
-    try std.testing.expectEqual(@as(f32, 1.0), output[0]);
-    try std.testing.expectEqual(@as(f32, 2.0), output[1]);
-    try std.testing.expectEqual(@as(f32, 3.0), output[2]);
-    try std.testing.expectEqual(@as(f32, 4.0), output[3]);
+        try std.testing.expectEqual(@as(ScalarType, 10.0), output[0]);
+        try std.testing.expectEqual(@as(ScalarType, 20.0), output[1]);
+        try std.testing.expectEqual(@as(ScalarType, 30.0), output[2]);
+        try std.testing.expectEqual(@as(ScalarType, 40.0), output[3]);
+    }
 }
 
-test "basic Processing loop: Identity" {
-    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 1 };
+// MARK: Loop: produce correct coordinates and loop type
+test "Loop: produce correct coordinates and loop type" {
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 2, .height = 2 };
 
-    var input_data: [4]f32 = .{ 1.0, 2.0, 3.0, 4.0 };
-    var output_data: [4]f32 = .{ 0, 0, 0, 0 };
+    inline for (AllTypes) |LoopType| {
+        inline for (AllTypes) |CoordType| {
+            const ScalarType = @typeInfo(LoopType).vector.child;
 
-    const source = zpp.In(f32, &input_data, region.width, region);
-    const destination = zpp.Out(f32, &output_data, region.width, region);
+            var input_data: [4]ScalarType = .{ 1.0, 2.0, 3.0, 4.0 };
+            const source = zpp.In(ScalarType, &input_data, region.width, region);
 
-    const processing_kernel = struct {
-        const Context = struct {};
+            var output: [4]ScalarType = .{ 0, 0, 0, 0 };
+            const destination = zpp.Out(ScalarType, &output, region.width, region);
 
-        fn process(ctx: Context, in: anytype) f32x4 {
-            _ = ctx;
-            return in.get();
+            const processing_kernel = struct {
+                fn process(ctx: anytype, in: anytype, x: anytype, y: anytype) LoopType {
+                    _ = ctx;
+                    const value = in.get();
+                    const VecType = @TypeOf(value);
+                    if (VecType != LoopType) {
+                        @compileError("Expected coordinate vectors to match LoopType");
+                    }
+                    if (@TypeOf(x) != CoordType) {
+                        @compileError("Expected coordinate vectors to match LoopType");
+                    }
+                    if (@TypeOf(y) != CoordType) {
+                        @compileError("Expected coordinate vectors to match LoopType");
+                    }
+                    return th.vectorCast(VecType, x) + th.vectorCast(VecType, y) * th.splatWithCast(VecType, 10) + value * th.splatWithCast(VecType, 20);
+                }
+            };
+
+            const result = zpp.Loop(LoopType, .{ .need_coordinates = CoordType }, source, .{}, processing_kernel.process);
+            zpp.Process(result, destination);
+
+            try std.testing.expectEqual(@as(ScalarType, 20.0), output[0]);
+            try std.testing.expectEqual(@as(ScalarType, 41.0), output[1]);
+            try std.testing.expectEqual(@as(ScalarType, 70.0), output[2]);
+            try std.testing.expectEqual(@as(ScalarType, 91.0), output[3]);
         }
-    };
-
-    const ctx = processing_kernel.Context{};
-    const result = zpp.Loop(f32x4, .{}, source, ctx, processing_kernel.process);
-    zpp.Process(result, destination);
-
-    try std.testing.expectEqual(@as(f32, 1.0), output_data[0]);
-    try std.testing.expectEqual(@as(f32, 2.0), output_data[1]);
-    try std.testing.expectEqual(@as(f32, 3.0), output_data[2]);
-    try std.testing.expectEqual(@as(f32, 4.0), output_data[3]);
+    }
 }
 
 test "basic Processing loop: Use coordinates" {

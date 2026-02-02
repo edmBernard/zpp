@@ -19,6 +19,7 @@ pub fn InputSource(comptime T: type, comptime PaddingPolicy: type) type {
         stride: u32,
         region: Region,
 
+        pub const OutputType = T;
         const Self = @This();
 
         /// Read a value at the given position, applying padding policy for out-of-bounds.
@@ -104,6 +105,7 @@ pub fn OutputDest(comptime T: type) type {
         stride: u32,
         region: Region,
 
+        pub const InputType = T;
         const Self = @This();
 
         // TODO: Add heavy testing for this property espectially with Group and Zip
@@ -154,6 +156,7 @@ pub fn InterleavedOutput(comptime T: type, comptime num_channels: comptime_int) 
         width: u32,
         region: Region,
 
+        pub const InputType = T;
         const Self = @This();
 
         /// Writes to pixel buffers are idempotent (overwriting same pixel is safe)

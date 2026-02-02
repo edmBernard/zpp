@@ -27,7 +27,15 @@ const loop = @import("loop.zig");
 // ============================================================================
 
 /// Default vector length - uses platform optimal size based on u8 processing
-pub const default_vec_len = std.simd.suggestVectorLength(u8) orelse 16;
+pub const suggested_vec_len = std.simd.suggestVectorLength(u8) orelse 1;
+pub const f32v = @Vector(std.simd.suggestVectorLength(f32) orelse 1, f32);
+pub const u16v = @Vector(std.simd.suggestVectorLength(u16) orelse 1, u16);
+pub const u8v = @Vector(std.simd.suggestVectorLength(u8) orelse 1, u8);
+
+// TODO: add tests for this utility
+pub fn VectorLike(comptime VectorType: type, comptime ScalarType: type) type {
+    return @Vector(@typeInfo(VectorType).vector.len, ScalarType);
+}
 
 // Region module
 pub const Region = region.Region;
@@ -103,4 +111,3 @@ pub const max = math.max;
 pub const clamp = math.clamp;
 pub const lerp = math.lerp;
 pub const fma = math.fma;
-

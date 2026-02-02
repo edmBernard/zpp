@@ -24,7 +24,7 @@ const zpp = @import("zpp");
 // ============================================================================
 
 /// Vector type for processing - matches library's internal vector size
-pub const VecF32 = @Vector(zpp.default_vec_len, f32);
+pub const VecF32 = @Vector(zpp.suggested_vec_len, f32);
 
 /// Convenience alias for zpp.splat with VecF32
 inline fn splat(scalar: f32) VecF32 {
@@ -332,7 +332,7 @@ pub fn main() !void {
 
     std.debug.print("Gradient Filter Example using ZPP\n", .{});
     std.debug.print("==================================\n", .{});
-    std.debug.print("SIMD vector length: {d}\n", .{zpp.default_vec_len});
+    std.debug.print("SIMD vector length: {d}\n", .{zpp.suggested_vec_len});
     std.debug.print("Pipeline: noise -> resize(2x) -> gradient -> gamma\n", .{});
     std.debug.print("Generating {d}x{d} image...\n", .{ width, height });
 
@@ -357,7 +357,7 @@ test "noise kernel produces valid values" {
     const ctx = NoiseContext{ .scale = splat(50.0) };
     const result = noiseKernel(ctx, splat(25.0), splat(25.0));
 
-    for (0..zpp.default_vec_len) |i| {
+    for (0..zpp.suggested_vec_len) |i| {
         // Output should be in [0, 1] range after mapping
         try std.testing.expect(result[i] >= 0.0 and result[i] <= 1.0);
     }

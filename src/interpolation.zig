@@ -25,12 +25,12 @@ pub const InterpolationMethod = enum {
 
 /// Pixel interpolator that provides interpolated access to an image.
 /// Used within InterpLoop kernels to sample pixels at non-integer coordinates.
-pub fn PixelInterpolator(comptime SrcType: type, comptime VecT: type, comptime method: InterpolationMethod) type {
+pub fn PixelInterpolator(comptime SourceType: type, comptime VecT: type, comptime method: InterpolationMethod) type {
     const vec_len = @typeInfo(VecT).vector.len;
     const ElemT = @typeInfo(VecT).vector.child;
 
     return struct {
-        source: SrcType,
+        source: SourceType,
         region: Region,
 
         const Self = @This();
@@ -141,9 +141,9 @@ pub fn PixelInterpolator(comptime SrcType: type, comptime VecT: type, comptime m
         /// Read a single pixel at integer coordinates, with padding
         inline fn readPixel(self: Self, xi: i32, yi: i32) ElemT {
             // Use source's read method if available (handles padding)
-            if (@hasDecl(SrcType, "read")) {
+            if (@hasDecl(SourceType, "read")) {
                 return self.source.read(xi, yi);
-            } else if (@hasDecl(SrcType, "evalAt")) {
+            } else if (@hasDecl(SourceType, "evalAt")) {
                 // For LoopResult sources, evaluate and take first element
                 const vec = self.source.evalAt(xi, yi);
                 return vec[0];
@@ -166,55 +166,23 @@ pub fn PixelInterpolator(comptime SrcType: type, comptime VecT: type, comptime m
 }
 
 // ============================================================================
-// MARK: Interpolate Source
-// ============================================================================
-
-/// Interpolate source expression that provides random-access interpolation.
-/// This materializes the input into a region cache for efficient random access.
-pub fn InterpolateSource(comptime SrcType: type, comptime VecT: type, comptime method: InterpolationMethod) type {
-    const ElemT = @typeInfo(VecT).vector.child;
-
-    return struct {
-        source: SrcType,
-        region: Region,
-        // For caching, we'd need to allocate - for now we'll do direct access
-        cache: ?[]ElemT = null,
-        allocator: ?std.mem.Allocator = null,
-
-        const Self = @This();
-
-        pub fn getRegion(self: Self) Region {
-            return self.region;
-        }
-
-        /// Get a pixel interpolator for sampling
-        pub fn getInterpolator(self: Self) PixelInterpolator(SrcType, VecT, method) {
-            return .{
-                .source = self.source,
-                .region = self.region,
-            };
-        }
-    };
-}
-
-// ============================================================================
 // MARK: InterpLoop Result
 // ============================================================================
 
 /// Result type for InterpLoop - evaluates kernel with interpolated pixel access
 pub fn InterpLoopResult(
     comptime VecT: type,
-    comptime SrcType: type,
-    comptime CtxType: type,
+    comptime SourceType: type,
+    comptime ContextType: type,
     comptime process_fn: anytype,
     comptime method: InterpolationMethod,
 ) type {
     const vec_len = @typeInfo(VecT).vector.len;
-    const InterpolatorType = PixelInterpolator(SrcType, VecT, method);
+    const InterpolatorType = PixelInterpolator(SourceType, VecT, method);
 
     return struct {
-        source: SrcType,
-        context: CtxType,
+        source: SourceType,
+        context: ContextType,
         region: Region,
 
         const Self = @This();
@@ -243,9 +211,9 @@ pub fn InterpLoopResult(
         }
 
         fn getSourceRegion(self: Self) Region {
-            if (@hasDecl(SrcType, "getRegion")) {
+            if (@hasDecl(SourceType, "getRegion")) {
                 return self.source.getRegion();
-            } else if (@hasField(SrcType, "region")) {
+            } else if (@hasField(SourceType, "region")) {
                 return self.source.region;
             } else {
                 return self.region;

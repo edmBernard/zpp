@@ -19,7 +19,7 @@ const zpp = @import("zpp");
 // MARK: SIMD Vector Configuration - Use zpp's recommended vector length
 // ============================================================================
 
-pub const vec_len = zpp.default_vec_len;
+pub const vec_len = zpp.suggested_vec_len;
 pub const VecF32 = @Vector(vec_len, f32);
 pub const VecU8 = @Vector(vec_len, u8);
 
@@ -365,7 +365,7 @@ pub fn main() !void {
 
     std.debug.print("Domain Warping Example using ZPP\n", .{});
     std.debug.print("================================\n", .{});
-    std.debug.print("SIMD vector length: {d} (from zpp.default_vec_len)\n", .{vec_len});
+    std.debug.print("SIMD vector length: {d} (from zpp.suggested_vec_len)\n", .{vec_len});
     std.debug.print("Generating {d}x{d} image...\n", .{ width, height });
 
     const start = std.time.milliTimestamp();

@@ -188,6 +188,9 @@ pub fn GroupDest(comptime NestedDest: type, comptime P: comptime_int, comptime Q
         pub const group_height = Q;
         pub const count = P * Q;
 
+        /// Writes are idempotent if the nested destination supports overlapping writes.
+        pub const supports_overlapping_writes = @hasDecl(NestedDest, "supports_overlapping_writes") and NestedDest.supports_overlapping_writes;
+
         pub fn getRegion(self: Self) Region {
             return self.region;
         }
@@ -325,6 +328,7 @@ pub fn GroupAccessor(comptime SrcType: type, comptime VecT: type, comptime P: co
     };
 }
 
+// TODO: add a proper member to determine group source
 /// Helper to detect if a type is a GroupSource
 pub fn isGroupSourceType(comptime T: type) bool {
     return @hasDecl(T, "group_width") and @hasDecl(T, "group_height") and @hasField(T, "nested");
