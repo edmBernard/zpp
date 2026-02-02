@@ -2,3 +2,10 @@
 /zig-out
 /context
 .DS_Store
+/.vscode
+
+# Media
+*.png
+*.jpg
+*.jpeg
+*.ppm
