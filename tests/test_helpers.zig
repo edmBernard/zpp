@@ -48,3 +48,23 @@ pub fn vectorCast(comptime VecT: type, value: anytype) VecT {
         else => @compileError("vectorCast only supports vector of f32, u16, u8"),
     }
 }
+
+pub fn scalarCast(comptime T: type, value: anytype) T {
+    switch (@typeInfo(T)) {
+        .float => {
+            switch (@typeInfo(@TypeOf(value))) {
+                .int, .comptime_int => return @as(T, @floatFromInt(value)),
+                .float, .comptime_float => return @as(T, @floatCast(value)),
+                else => @compileError("vectorCast only supports int and float scalar values to float"),
+            }
+        },
+        .int => {
+            switch (@typeInfo(@TypeOf(value))) {
+                .int, .comptime_int => return @as(T, @intCast(value)),
+                .float, .comptime_float => return @as(T, @intFromFloat(value)),
+                else => @compileError("vectorCast only supports int and float scalar values to int"),
+            }
+        },
+        else => @compileError("scalarCast only supports vector of f32, u16, u8"),
+    }
+}
