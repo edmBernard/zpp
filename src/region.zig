@@ -162,8 +162,8 @@ pub const Region = struct {
     /// and vertically times lower than the current. Start coordinates are rounded down and stop
     /// coordinates are rounded up.
     pub fn downscaled(self: Self, horizontally: i32, vertically: i32) Self {
-        const new_x = divFloor(self.x, horizontally);
-        const new_y = divFloor(self.y, vertically);
+        const new_x = @divFloor(self.x, horizontally);
+        const new_y = @divFloor(self.y, vertically);
         const new_stop_x = divCeil(self.stopX(), horizontally);
         const new_stop_y = divCeil(self.stopY(), vertically);
         return .{
@@ -194,12 +194,6 @@ pub const Region = struct {
         };
     }
 
-    /// Returns true if the regions are equal.
-    pub fn eql(self: Self, other: Self) bool {
-        return self.x == other.x and self.y == other.y and
-            self.width == other.width and self.height == other.height;
-    }
-
     /// Returns the smallest region containing both regions a and b.
     pub fn Union(self: Self, b: Self) Self {
         const new_x = @min(self.x, b.x);
@@ -215,16 +209,7 @@ pub const Region = struct {
     }
 };
 
-/// Floor division for signed integers.
-pub fn divFloor(a: i32, b: i32) i32 {
-    const d = @divTrunc(a, b);
-    const r = @rem(a, b);
-    return if (r != 0 and (r < 0) != (b < 0)) d - 1 else d;
-}
-
 /// Ceiling division for signed integers.
-pub fn divCeil(a: i32, b: i32) i32 {
-    const d = @divTrunc(a, b);
-    const r = @rem(a, b);
-    return if (r != 0 and (r > 0) == (b > 0)) d + 1 else d;
+fn divCeil(a: i32, b: i32) i32 {
+    return -@divFloor(-a, b);
 }

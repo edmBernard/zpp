@@ -3,6 +3,91 @@
 const std = @import("std");
 const zpp = @import("zpp");
 
+// MARK: Margin tests
+
+test "Margin predicates comprehensive" {
+    // Zero margin
+    const zero: zpp.Margin = .{};
+    try std.testing.expect(zero.isZero());
+    try std.testing.expect(!zero.isHorizontal());
+    try std.testing.expect(!zero.isVertical());
+    try std.testing.expect(!zero.isIsotropic());
+    try std.testing.expect(!zero.is2D());
+    try std.testing.expectEqual(@as(u32, 0), zero.maxExtent());
+
+    // Horizontal margin
+    const horiz_manual: zpp.Margin = .{ .left = 2, .right = 2 };
+    const horiz = zpp.marginH(2);
+    try std.testing.expectEqual(horiz, horiz_manual);
+    try std.testing.expect(!horiz.isZero());
+    try std.testing.expect(horiz.isHorizontal());
+    try std.testing.expect(!horiz.isVertical());
+    try std.testing.expect(!horiz.isIsotropic());
+    try std.testing.expect(!horiz.is2D());
+    try std.testing.expectEqual(@as(u32, 2), horiz.maxExtent());
+
+    // Vertical margin
+    const vert_manual: zpp.Margin = .{ .top = 3, .bottom = 3 };
+    const vert = zpp.marginV(3);
+    try std.testing.expectEqual(vert, vert_manual);
+    try std.testing.expect(!vert.isZero());
+    try std.testing.expect(!vert.isHorizontal());
+    try std.testing.expect(vert.isVertical());
+    try std.testing.expect(!vert.isIsotropic());
+    try std.testing.expect(!vert.is2D());
+    try std.testing.expectEqual(@as(u32, 3), vert.maxExtent());
+
+    // Isotropic margin
+    const isot_manual: zpp.Margin = .{ .left = 5, .right = 5, .top = 5, .bottom = 5 };
+    const isot = zpp.marginI(5);
+    try std.testing.expectEqual(isot, isot_manual);
+    try std.testing.expect(!isot.isZero());
+    try std.testing.expect(!isot.isHorizontal());
+    try std.testing.expect(!isot.isVertical());
+    try std.testing.expect(isot.isIsotropic());
+    try std.testing.expect(isot.is2D());
+    try std.testing.expectEqual(@as(u32, 5), isot.maxExtent());
+
+    // 2D margin (asymmetric)
+    const asym: zpp.Margin = .{ .left = 1, .right = 2, .top = 3, .bottom = 4 };
+    try std.testing.expect(!asym.isZero());
+    try std.testing.expect(!asym.isHorizontal());
+    try std.testing.expect(!asym.isVertical());
+    try std.testing.expect(!asym.isIsotropic());
+    try std.testing.expect(asym.is2D());
+    try std.testing.expectEqual(@as(u32, 4), asym.maxExtent());
+}
+
+test "Margin helpers" {
+    // marginH
+    const h = zpp.marginH(3);
+    try std.testing.expectEqual(@as(u32, 3), h.left);
+    try std.testing.expectEqual(@as(u32, 3), h.right);
+    try std.testing.expectEqual(@as(u32, 0), h.top);
+    try std.testing.expectEqual(@as(u32, 0), h.bottom);
+    try std.testing.expect(h.isHorizontal());
+    try std.testing.expect(!h.isVertical());
+
+    // marginV
+    const v = zpp.marginV(2);
+    try std.testing.expectEqual(@as(u32, 0), v.left);
+    try std.testing.expectEqual(@as(u32, 0), v.right);
+    try std.testing.expectEqual(@as(u32, 2), v.top);
+    try std.testing.expectEqual(@as(u32, 2), v.bottom);
+    try std.testing.expect(v.isVertical());
+    try std.testing.expect(!v.isHorizontal());
+
+    // marginI
+    const i = zpp.marginI(4);
+    try std.testing.expectEqual(@as(u32, 4), i.left);
+    try std.testing.expectEqual(@as(u32, 4), i.right);
+    try std.testing.expectEqual(@as(u32, 4), i.top);
+    try std.testing.expectEqual(@as(u32, 4), i.bottom);
+    try std.testing.expect(i.isIsotropic());
+}
+
+// MARK: Region tests
+
 test "Region operations" {
     const region: zpp.Region = .{ .x = 10, .y = 20, .width = 100, .height = 50 };
 
@@ -55,34 +140,6 @@ test "Region operations" {
     try std.testing.expectEqual(@as(u32, 70), uni.height);
 }
 
-test "Margin helpers" {
-    // marginH
-    const h = zpp.marginH(3);
-    try std.testing.expectEqual(@as(u32, 3), h.left);
-    try std.testing.expectEqual(@as(u32, 3), h.right);
-    try std.testing.expectEqual(@as(u32, 0), h.top);
-    try std.testing.expectEqual(@as(u32, 0), h.bottom);
-    try std.testing.expect(h.isHorizontal());
-    try std.testing.expect(!h.isVertical());
-
-    // marginV
-    const v = zpp.marginV(2);
-    try std.testing.expectEqual(@as(u32, 0), v.left);
-    try std.testing.expectEqual(@as(u32, 0), v.right);
-    try std.testing.expectEqual(@as(u32, 2), v.top);
-    try std.testing.expectEqual(@as(u32, 2), v.bottom);
-    try std.testing.expect(v.isVertical());
-    try std.testing.expect(!v.isHorizontal());
-
-    // marginI
-    const i = zpp.marginI(4);
-    try std.testing.expectEqual(@as(u32, 4), i.left);
-    try std.testing.expectEqual(@as(u32, 4), i.right);
-    try std.testing.expectEqual(@as(u32, 4), i.top);
-    try std.testing.expectEqual(@as(u32, 4), i.bottom);
-    try std.testing.expect(i.isIsotropic());
-}
-
 test "Region edge cases" {
     // Zero-area region
     const zero_region: zpp.Region = .{ .x = 0, .y = 0, .width = 0, .height = 0 };
@@ -125,24 +182,4 @@ test "Region downscaled with rounding" {
     try std.testing.expectEqual(@as(i32, 2), downscaled.y);
     try std.testing.expectEqual(@as(u32, 4), downscaled.width);
     try std.testing.expectEqual(@as(u32, 5), downscaled.height);
-}
-
-test "Margin predicates comprehensive" {
-    // Zero margin
-    const zero: zpp.Margin = .{};
-    try std.testing.expect(zero.isZero());
-    try std.testing.expect(!zero.isHorizontal());
-    try std.testing.expect(!zero.isVertical());
-    try std.testing.expect(!zero.isIsotropic());
-    try std.testing.expect(!zero.is2D());
-    try std.testing.expectEqual(@as(u32, 0), zero.maxExtent());
-
-    // 2D margin (asymmetric)
-    const asym: zpp.Margin = .{ .left = 1, .right = 2, .top = 3, .bottom = 4 };
-    try std.testing.expect(!asym.isZero());
-    try std.testing.expect(!asym.isHorizontal());
-    try std.testing.expect(!asym.isVertical());
-    try std.testing.expect(!asym.isIsotropic());
-    try std.testing.expect(asym.is2D());
-    try std.testing.expectEqual(@as(u32, 4), asym.maxExtent());
 }
