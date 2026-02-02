@@ -20,8 +20,6 @@ pub fn InputSource(comptime T: type, comptime PaddingPolicy: type) type {
         region: Region,
 
         const Self = @This();
-        pub const sample_type = T;
-        pub const padding_policy = PaddingPolicy;
 
         /// Read a value at the given position, applying padding policy for out-of-bounds.
         pub fn read(self: Self, x: i32, y: i32) T {
@@ -60,6 +58,7 @@ pub fn InputSource(comptime T: type, comptime PaddingPolicy: type) type {
                 return self.data[start_idx..][0..vec_len].*;
             }
 
+            // TODO: Implemente vectorized padding
             // Slow path: apply padding policy element-by-element
             var result: VecT = undefined;
             inline for (0..vec_len) |i| {
@@ -107,6 +106,7 @@ pub fn OutputDest(comptime T: type) type {
 
         const Self = @This();
 
+        // TODO: Add heavy testing for this property espectially with Group and Zip
         /// Writes to pixel buffers are idempotent (overwriting same pixel is safe)
         pub const supports_overlapping_writes = true;
 
@@ -120,6 +120,7 @@ pub fn OutputDest(comptime T: type) type {
             dest.* = values;
         }
 
+        // TODO: why API consistency ? should use scalar ?
         /// Write a single scalar value (for remainder handling)
         /// Accepts a vector for API consistency but only uses the first element
         pub fn writeScalar(self: Self, x: u32, y: u32, values: anytype) void {
@@ -163,18 +164,18 @@ pub fn InterleavedOutput(comptime T: type, comptime num_channels: comptime_int) 
         pub fn write(self: Self, x: u32, y: u32, values: anytype) void {
             const ValuesType = @TypeOf(values);
             const values_type_info = @typeInfo(ValuesType);
-            if (values_type_info != .array) {
+            if (comptime values_type_info != .array) {
                 @compileError("InterleavedOutput.write expects an array of vectors");
             }
-            if (values_type_info.array.len != num_channels) {
+            if (comptime values_type_info.array.len != num_channels) {
                 @compileError("InterleavedOutput.write expects exactly " ++ std.fmt.comptimePrint("{}", .{num_channels}) ++ " channels");
             }
             const VecType = values_type_info.array.child;
             const vec_info = @typeInfo(VecType);
-            if (vec_info != .vector) {
+            if (comptime vec_info != .vector) {
                 @compileError("InterleavedOutput.write expects an array of vectors");
             }
-            if (vec_info.vector.child != T) {
+            if (comptime vec_info.vector.child != T) {
                 @compileError("InterleavedOutput.write expects vectors of type " ++ @typeName(T));
             }
             const vec_len = vec_info.vector.len;
@@ -188,6 +189,7 @@ pub fn InterleavedOutput(comptime T: type, comptime num_channels: comptime_int) 
             dest.* = interlaced;
         }
 
+        // TODO: why API consistency ? should use scalar ?
         /// Write a single multi-channel pixel (for remainder handling)
         /// Accepts an array of vectors for API consistency but only uses the first element of each.
         pub fn writeScalar(self: Self, x: u32, y: u32, values: anytype) void {
@@ -213,4 +215,3 @@ pub fn InterleavedOut(
         .region = region,
     };
 }
-

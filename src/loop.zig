@@ -13,7 +13,25 @@ const zip_mod = @import("zip.zig");
 const group_mod = @import("group.zig");
 
 const Region = region_mod.Region;
-const DefaultLoopOptions = padding_mod.DefaultLoopOptions;
+const Margin = region_mod.Margin;
+
+// ============================================================================
+// MARK: Loop Options
+// ============================================================================
+
+/// Options for Loop and Generate operations
+pub fn LoopOptions(comptime CoordType: ?type) type {
+    return struct {
+        need_coordinates: ?type = CoordType,
+        margin: Margin = .{},
+    };
+}
+
+/// Default loop options type
+pub const DefaultLoopOptions = struct {
+    need_coordinates: ?type = null,
+    margin: Margin = .{},
+};
 
 // ============================================================================
 // MARK: Helper Functions
@@ -321,4 +339,3 @@ pub fn Process(source: anytype, dest: anytype) void {
         }
     }
 }
-

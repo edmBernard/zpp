@@ -37,22 +37,3 @@ pub const RepeatEdgePadding = struct {
         return 0;
     }
 };
-
-// ============================================================================
-// MARK: Loop Options
-// ============================================================================
-
-/// Options for Loop and Generate operations
-pub fn LoopOptions(comptime CoordType: ?type) type {
-    return struct {
-        need_coordinates: ?type = CoordType,
-        margin: Margin = .{},
-    };
-}
-
-/// Default loop options type
-pub const DefaultLoopOptions = struct {
-    need_coordinates: ?type = null,
-    margin: Margin = .{},
-};
-
