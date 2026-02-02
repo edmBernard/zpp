@@ -305,8 +305,8 @@ pub fn Loop(
 /// Get compatible vector length.
 /// In case of conversion the length must accommodate both source and destination.
 fn getCompatibleVectorLen(comptime SourceType: type, comptime DestType: type) comptime_int {
-    const suggested_source_len = std.simd.suggestVectorLength(SourceType.InnerT) orelse 1;
-    const suggested_dest_len = std.simd.suggestVectorLength(DestType.InnerT) orelse 1;
+    const suggested_source_len = std.simd.suggestVectorLength(SourceType.OutputScalarType) orelse 1;
+    const suggested_dest_len = std.simd.suggestVectorLength(DestType.InputScalarType) orelse 1;
     return @max(suggested_source_len, suggested_dest_len);
 }
 
@@ -340,25 +340,53 @@ pub fn Process(source: anytype, dest: anytype) void {
         const y_coord: i32 = @as(i32, @intCast(y)) + region.y;
 
         // Process full vectors
-        var x: u32 = 0;
+        var x: i32 = 0;
         while (x + vec_len <= region.width) : (x += vec_len) {
-            const result = source.evalAt(@as(i32, @intCast(x)) + region.x, y_coord);
-            dest.write(x, @intCast(y), result);
+            const x_coord: i32 = @as(i32, @intCast(x)) + region.x;
+            const result = blk: {
+                if (@hasDecl(SourceType, "evalAt")) {
+                    break :blk source.evalAt(x_coord, y_coord);
+                } else if (@hasDecl(SourceType, "readVec")) {
+                    break :blk source.readVec(@Vector(vec_len, SourceType.OutputScalarType), x_coord, y_coord);
+                } else {
+                    @compileError("Source must have evalAt or readVec method");
+                }
+            };
+            dest.write(@intCast(x_coord), @intCast(y_coord), result);
         }
 
         // Handle remaining pixels
         if (x < region.width) {
-            if (supports_overlapping_writes and region.width >= vec_len) {
+            if (supports_overlapping_writes and vec_len <= region.width) {
                 // Optimization: shift x back to process the last vec_len pixels as a full vector
                 // This overlaps with already-written pixels but is safe for idempotent destinations
                 const aligned_x = region.width - vec_len;
-                const result = source.evalAt(@as(i32, @intCast(aligned_x)) + region.x, y_coord);
-                dest.write(aligned_x, @intCast(y), result);
+                const x_coord: i32 = @as(i32, @intCast(aligned_x)) + region.x;
+                const result = blk: {
+                    if (@hasDecl(SourceType, "evalAt")) {
+                        break :blk source.evalAt(x_coord, y_coord);
+                    } else if (@hasDecl(SourceType, "readVec")) {
+                        break :blk source.readVec(@Vector(vec_len, SourceType.OutputScalarType), x_coord, y_coord);
+                    } else {
+                        @compileError("Source must have evalAt or readVec method");
+                    }
+                };
+
+                dest.write(@intCast(x_coord), @intCast(y_coord), result);
             } else {
                 // Scalar fallback for accumulators or narrow regions
                 while (x < region.width) : (x += 1) {
-                    const result = source.evalAt(@as(i32, @intCast(x)) + region.x, y_coord);
-                    dest.writeScalar(x, @intCast(y), result);
+                    const x_coord: i32 = @as(i32, @intCast(x)) + region.x;
+                    const result = blk: {
+                        if (@hasDecl(SourceType, "evalAt")) {
+                            break :blk source.evalAt(x_coord, y_coord);
+                        } else if (@hasDecl(SourceType, "readVec")) {
+                            break :blk source.readVec(@Vector(vec_len, SourceType.OutputScalarType), x_coord, y_coord);
+                        } else {
+                            @compileError("Source must have evalAt or readVec method");
+                        }
+                    };
+                    dest.writeScalar(@intCast(x_coord), @intCast(y_coord), result);
                 }
             }
         }

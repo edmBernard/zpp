@@ -19,7 +19,7 @@ pub fn InputSource(comptime T: type, comptime PaddingPolicy: type) type {
         stride: u32,
         region: Region,
 
-        pub const OutputType = T;
+        pub const OutputScalarType = T;
         const Self = @This();
 
         /// Read a value at the given position, applying padding policy for out-of-bounds.
@@ -28,8 +28,8 @@ pub fn InputSource(comptime T: type, comptime PaddingPolicy: type) type {
             if (x >= self.region.x and x < self.region.stopX() and
                 y >= self.region.y and y < self.region.stopY())
             {
-                const ux: u32 = @intCast(x - self.region.x);
-                const uy: u32 = @intCast(y - self.region.y);
+                const ux: u32 = @intCast(x);
+                const uy: u32 = @intCast(y);
                 const idx = uy * self.stride + ux;
                 if (idx < self.data.len) {
                     return self.data[idx];
@@ -51,8 +51,8 @@ pub fn InputSource(comptime T: type, comptime PaddingPolicy: type) type {
                 x + vec_len <= self.region.stopX() and
                 y >= self.region.y and y < self.region.stopY())
             {
-                const ux: u32 = @intCast(x - self.region.x);
-                const uy: u32 = @intCast(y - self.region.y);
+                const ux: u32 = @intCast(x);
+                const uy: u32 = @intCast(y);
                 const start_idx = uy * self.stride + ux;
 
                 // Direct SIMD load from contiguous memory
@@ -105,7 +105,7 @@ pub fn OutputDest(comptime T: type) type {
         stride: u32,
         region: Region,
 
-        pub const InputType = T;
+        pub const InputScalarType = T;
         const Self = @This();
 
         // TODO: Add heavy testing for this property espectially with Group and Zip
@@ -156,7 +156,7 @@ pub fn InterleavedOutput(comptime T: type, comptime num_channels: comptime_int) 
         width: u32,
         region: Region,
 
-        pub const InputType = T;
+        pub const InputScalarType = T;
         const Self = @This();
 
         /// Writes to pixel buffers are idempotent (overwriting same pixel is safe)

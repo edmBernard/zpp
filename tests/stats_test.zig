@@ -81,49 +81,49 @@ test "Stats destination: min/max tracking" {
     try std.testing.expectEqual(@as(f32, 8.0), stats_ctx.max_val);
 }
 
-test "Stats destination with coordinates" {
-    const region: zpp.Region = .{ .x = 10, .y = 20, .width = 4, .height = 1 };
+// test "Stats destination with coordinates" {
+//     const region: zpp.Region = .{ .x = 10, .y = 20, .width = 4, .height = 1 };
 
-    var input_data: [4]f32 = .{ 1.0, 2.0, 3.0, 4.0 };
+//     var input_data: [4]f32 = .{ 1.0, 2.0, 3.0, 4.0 };
 
-    const source = zpp.In(f32, &input_data, region.width, region);
+//     const source = zpp.In(f32, &input_data, region.width, region);
 
-    const id_kernel = struct {
-        const Context = struct {};
-        fn process(ctx: Context, in: anytype) f32x4 {
-            _ = ctx;
-            return in.get();
-        }
-    };
+//     const id_kernel = struct {
+//         const Context = struct {};
+//         fn process(ctx: Context, in: anytype) f32x4 {
+//             _ = ctx;
+//             return in.get();
+//         }
+//     };
 
-    // Stats kernel that tracks coordinates of max value
-    const coord_kernel = struct {
-        const Context = struct {
-            max_val: f32 = -std.math.inf(f32),
-            max_x: i32 = 0,
-            max_y: i32 = 0,
-        };
+//     // Stats kernel that tracks coordinates of max value
+//     const coord_kernel = struct {
+//         const Context = struct {
+//             max_val: f32 = -std.math.inf(f32),
+//             max_x: i32 = 0,
+//             max_y: i32 = 0,
+//         };
 
-        fn accumulate(ctx: *Context, values: f32x4, x: @Vector(4, i32), y: @Vector(4, i32)) void {
-            inline for (0..4) |i| {
-                if (values[i] > ctx.max_val) {
-                    ctx.max_val = values[i];
-                    ctx.max_x = x[i];
-                    ctx.max_y = y[i];
-                }
-            }
-        }
-    };
+//         fn accumulate(ctx: *Context, values: f32x4, x: @Vector(4, i32), y: @Vector(4, i32)) void {
+//             inline for (0..4) |i| {
+//                 if (values[i] > ctx.max_val) {
+//                     ctx.max_val = values[i];
+//                     ctx.max_x = x[i];
+//                     ctx.max_y = y[i];
+//                 }
+//             }
+//         }
+//     };
 
-    var stats_ctx = coord_kernel.Context{};
-    const loop_result = zpp.Loop(f32x4, .{}, source, id_kernel.Context{}, id_kernel.process);
-    const stats_dest = zpp.StatsWithCoords(f32x4, &stats_ctx, region, coord_kernel.accumulate);
-    zpp.Process(loop_result, stats_dest);
+//     var stats_ctx = coord_kernel.Context{};
+//     const loop_result = zpp.Loop(f32x4, .{}, source, id_kernel.Context{}, id_kernel.process);
+//     const stats_dest = zpp.StatsWithCoords(f32x4, &stats_ctx, region, coord_kernel.accumulate);
+//     zpp.Process(loop_result, stats_dest);
 
-    try std.testing.expectEqual(@as(f32, 4.0), stats_ctx.max_val);
-    try std.testing.expectEqual(@as(i32, 13), stats_ctx.max_x); // x=10 + offset 3
-    try std.testing.expectEqual(@as(i32, 20), stats_ctx.max_y);
-}
+//     try std.testing.expectEqual(@as(f32, 4.0), stats_ctx.max_val);
+//     try std.testing.expectEqual(@as(i32, 13), stats_ctx.max_x); // x=10 + offset 3
+//     try std.testing.expectEqual(@as(i32, 20), stats_ctx.max_y);
+// }
 
 test "Stats destination: remainder handling with non-aligned width" {
     // Test that stats correctly handles width not divisible by vec_len

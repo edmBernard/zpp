@@ -27,8 +27,8 @@ pub const RepeatEdgePadding = struct {
         const clamped_x = @max(region.x, @min(x, region.stopX() - 1));
         const clamped_y = @max(region.y, @min(y, region.stopY() - 1));
 
-        const ux: u32 = @intCast(clamped_x - region.x);
-        const uy: u32 = @intCast(clamped_y - region.y);
+        const ux: u32 = @intCast(clamped_x);
+        const uy: u32 = @intCast(clamped_y);
         const idx = uy * stride + ux;
 
         if (idx < data.len) {

@@ -3,7 +3,7 @@ const std = @import("std");
 /// fill an array with a ramp of values starting from `start` and incrementing by `step`
 pub fn fillRamp(comptime T: type, arr: []T, comptime start: T, comptime step: T) void {
     var value: T = start;
-    inline for (arr) |*elem| {
+    for (arr) |*elem| {
         elem.* = value;
         value += step;
     }

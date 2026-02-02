@@ -111,3 +111,43 @@ test "Generator: produce correct coordinates type: width not multiple of batch s
         }
     }
 }
+
+test "Generator: Only fill requested region: Same global size, different regions" {
+    const image_width = 9;
+    const image_height = 5;
+
+    const output_region: zpp.Region = .{ .x = 2, .y = 1, .width = 5, .height = 3 };
+    const output_stride = image_width;
+
+    inline for (AllTypes) |CoordType| {
+        inline for (AllTypes) |OutputType| {
+            const ScalarType = @typeInfo(OutputType).vector.child;
+
+            var output_data = [_]ScalarType{0} ** (image_width * image_height);
+            const destination = zpp.Out(ScalarType, &output_data, output_stride, output_region);
+
+            const processing_kernel = struct {
+                fn process(ctx: anytype, x: anytype, y: anytype) OutputType {
+                    _ = ctx;
+                    const VecType = @TypeOf(x);
+                    if (VecType != CoordType) {
+                        @compileError("Expected coordinate vectors to match CoordType");
+                    }
+                    return th.vectorCast(OutputType, x) + th.vectorCast(OutputType, y) * th.splatWithCast(OutputType, 10);
+                }
+            };
+            // TODO: does generator need the region ?
+            const result = zpp.Generate(CoordType, output_region, .{}, processing_kernel.process);
+            zpp.Process(result, destination);
+
+            const expected_data: [45]ScalarType = .{
+                0, 0, 0,  0,  0,  0,  0,  0, 0,
+                0, 0, 12, 13, 14, 15, 16, 0, 0,
+                0, 0, 22, 23, 24, 25, 26, 0, 0,
+                0, 0, 32, 33, 34, 35, 36, 0, 0,
+                0, 0, 0,  0,  0,  0,  0,  0, 0,
+            };
+            try std.testing.expectEqual(expected_data, output_data);
+        }
+    }
+}
