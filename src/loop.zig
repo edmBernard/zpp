@@ -530,6 +530,34 @@ fn processSplit(
     }
 }
 
+/// Extract the first SIMD lane from a result value.
+/// For vectors: returns the scalar at lane 0.
+/// For struct tuples (from Zip/Group): returns an array of scalars from each element's lane 0.
+fn firstLane(result: anytype) FirstLaneType(@TypeOf(result)) {
+    const T = @TypeOf(result);
+    const info = @typeInfo(T);
+    switch (info) {
+        .vector => return result[0],
+        .@"struct" => |s| {
+            var out: FirstLaneType(T) = undefined;
+            inline for (0..s.fields.len) |i| {
+                out[i] = firstLane(result[i]);
+            }
+            return out;
+        },
+        else => @compileError("Unsupported type for firstLane: expected vector or struct tuple"),
+    }
+}
+
+fn FirstLaneType(comptime T: type) type {
+    const info = @typeInfo(T);
+    return switch (info) {
+        .vector => |v| v.child,
+        .@"struct" => |s| [s.fields.len]FirstLaneType(s.fields[0].type),
+        else => @compileError("Unsupported type for FirstLaneType: " ++ @typeName(T)),
+    };
+}
+
 /// Process a row segment [x_start, x_stop) using checked (bounds-checking) reads.
 fn processRowChecked(
     comptime SourceType: type,
@@ -585,7 +613,7 @@ fn processRowChecked(
                         @compileError("Source must have evalAt or readVec method");
                     }
                 };
-                dest.writeScalar(@intCast(x_coord), @intCast(y_coord), result);
+                dest.writeScalar(@intCast(x_coord), @intCast(y_coord), firstLane(result));
             }
         }
     }

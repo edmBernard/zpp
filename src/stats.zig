@@ -50,11 +50,11 @@ pub fn StatsDest(
 
         /// "Write" a single scalar value by calling the stats function
         /// Only processes lane 0 to avoid overcounting in remainder handling
-        pub fn writeScalar(self: Self, x: u32, y: u32, values: VecT) void {
+        pub fn writeScalar(self: Self, x: u32, y: u32, value: InputType) void {
             // Create a vector with only lane 0 populated, others zeroed
             // This ensures @reduce operations only count the valid scalar value
             var single: VecT = @splat(0);
-            single[0] = values[0];
+            single[0] = value;
 
             if (has_coords) {
                 const x_vec: @Vector(vec_len, i32) = @splat(@as(i32, @intCast(x)) + self.region.x);

@@ -127,13 +127,11 @@ pub fn OutputDest(comptime T: type) type {
             dest.* = values;
         }
 
-        // TODO: why API consistency ? should use scalar ?
         /// Write a single scalar value (for remainder handling)
-        /// Accepts a vector for API consistency but only uses the first element
-        pub fn writeScalar(self: Self, x: u32, y: u32, values: anytype) void {
+        pub fn writeScalar(self: Self, x: u32, y: u32, value: T) void {
             const idx = y * self.stride + x;
             if (idx < self.data.len) {
-                self.data[idx] = values[0];
+                self.data[idx] = value;
             }
         }
     };
@@ -197,13 +195,11 @@ pub fn InterleavedOutput(comptime T: type, comptime num_channels: comptime_int) 
             dest.* = interlaced;
         }
 
-        // TODO: why API consistency ? should use scalar ?
         /// Write a single multi-channel pixel (for remainder handling)
-        /// Accepts an array of vectors for API consistency but only uses the first element of each.
         pub fn writeScalar(self: Self, x: u32, y: u32, values: anytype) void {
             const offset = y * self.width * num_channels + x * num_channels;
             inline for (0..num_channels) |c| {
-                self.data[offset + c] = values[c][0];
+                self.data[offset + c] = values[c];
             }
         }
     };
