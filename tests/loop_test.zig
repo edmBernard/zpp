@@ -201,6 +201,102 @@ test "Loop: margins with RepeatEdgePadding across types" {
     }
 }
 
+// MARK: Loop: margins on wide region triggers split iteration
+test "Loop: margins on wide region triggers split iteration" {
+    // Width=12 with margin left=1, right=1, vec_len=4:
+    // Interior width = 12 - 1 - 1 - 4 + 1 = 7, interior x range [1, 8)
+    // This guarantees processSplit is used with:
+    //   left edge:  x=0 (1 pixel, checked)
+    //   interior:   x=1..7 (1 full vec at x=1, 1 at x=5, remainder handled)
+    //   right edge: x=8..11 (4 pixels, checked)
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 12, .height = 3 };
+
+    inline for (AllTypes) |LoopType| {
+        const ScalarType = @typeInfo(LoopType).vector.child;
+
+        var input_data: [36]ScalarType = undefined;
+        th.fillRamp(ScalarType, &input_data, 1, 1);
+        var output_data = [_]ScalarType{0} ** 36;
+
+        const source = zpp.In(ScalarType, &input_data, region.width, region);
+        const destination = zpp.Out(ScalarType, &output_data, region.width, region);
+
+        const blur_kernel = struct {
+            fn process(ctx: anytype, in: anytype) LoopType {
+                _ = ctx;
+                // Horizontal 3-tap sum: left + center + right
+                return in.getAt(-1, 0) + in.getAt(0, 0) + in.getAt(1, 0);
+            }
+        };
+
+        const result = zpp.Loop(LoopType, .{ .margin = .{ .left = 1, .right = 1 } }, source, .{}, blur_kernel.process);
+        zpp.Process(result, destination);
+
+        // Verify against manual computation
+        // input_data[i] = i+1 (1-indexed ramp)
+        // With RepeatEdgePadding: x=-1 clamps to x=0, x=12 clamps to x=11
+        // out[y][x] = in[y][max(0,x-1)] + in[y][x] + in[y][min(11,x+1)]
+        for (0..3) |y| {
+            for (0..12) |x| {
+                const left_x = if (x == 0) 0 else x - 1;
+                const right_x = if (x == 11) 11 else x + 1;
+                const expected = input_data[y * 12 + left_x] + input_data[y * 12 + x] + input_data[y * 12 + right_x];
+                try std.testing.expectEqual(expected, output_data[y * 12 + x]);
+            }
+        }
+    }
+}
+
+// MARK: Loop: vertical margins on tall region triggers split iteration
+test "Loop: vertical margins on tall region triggers split iteration" {
+    // Width=8, height=6, margin top=1, bottom=1
+    // Interior height = 6 - 1 - 1 = 4 (rows 1..4)
+    // No horizontal margin so interior width = source width - vec_len + 1 ...
+    // Actually, margin must be non-zero for split to activate, and it needs
+    // both vertical margin and enough width for horizontal interior.
+    // Use 2D margin: left=1, right=1, top=1, bottom=1
+    // Interior: x in [1, 8-1-4+1) = [1, 4), y in [1, 5)
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 12, .height = 6 };
+
+    var input_data: [72]f32 = undefined;
+    th.fillRamp(f32, &input_data, 1, 1);
+    var output_data = [_]f32{0} ** 72;
+
+    const source = zpp.In(f32, &input_data, region.width, region);
+    const destination = zpp.Out(f32, &output_data, region.width, region);
+
+    // 2D kernel: sum of cross neighbors (left + right + above + below + center)
+    const cross_kernel = struct {
+        fn process(ctx: anytype, in: anytype) f32x4 {
+            _ = ctx;
+            return in.getAt(-1, 0) + in.getAt(1, 0) + in.getAt(0, -1) + in.getAt(0, 1) + in.getAt(0, 0);
+        }
+    };
+
+    const result = zpp.Loop(f32x4, .{ .margin = .{ .left = 1, .right = 1, .top = 1, .bottom = 1 } }, source, .{}, cross_kernel.process);
+    zpp.Process(result, destination);
+
+    // Verify against manual computation for every pixel
+    for (0..6) |y| {
+        for (0..12) |x| {
+            const ix = @as(i32, @intCast(x));
+            const iy = @as(i32, @intCast(y));
+            // With RepeatEdgePadding
+            const left_x: usize = if (ix > 0) x - 1 else 0;
+            const right_x: usize = if (ix < 11) x + 1 else 11;
+            const above_y: usize = if (iy > 0) y - 1 else 0;
+            const below_y: usize = if (iy < 5) y + 1 else 5;
+
+            const expected = input_data[y * 12 + left_x] +
+                input_data[y * 12 + right_x] +
+                input_data[above_y * 12 + x] +
+                input_data[below_y * 12 + x] +
+                input_data[y * 12 + x];
+            try std.testing.expectApproxEqAbs(expected, output_data[y * 12 + x], 1e-5);
+        }
+    }
+}
+
 // MARK: Loop: generator with coordinates at non-origin region
 test "Loop: generator with coordinates at non-origin region" {
     // Non-origin region: output buffer must cover absolute coordinates

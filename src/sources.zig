@@ -51,12 +51,7 @@ pub fn InputSource(comptime T: type, comptime PaddingPolicy: type) type {
                 x + vec_len <= self.region.stopX() and
                 y >= self.region.y and y < self.region.stopY())
             {
-                const ux: u32 = @intCast(x);
-                const uy: u32 = @intCast(y);
-                const start_idx = uy * self.stride + ux;
-
-                // Direct SIMD load from contiguous memory
-                return self.data[start_idx..][0..vec_len].*;
+                return self.readVecUnchecked(VecT, x, y);
             }
 
             // TODO: Implemente vectorized padding
@@ -66,6 +61,16 @@ pub fn InputSource(comptime T: type, comptime PaddingPolicy: type) type {
                 result[i] = self.read(x + @as(i32, @intCast(i)), y);
             }
             return result;
+        }
+
+        /// Read a vector of values without bounds checking.
+        /// Caller MUST guarantee all vec_len elements are within the source region.
+        pub inline fn readVecUnchecked(self: Self, comptime VecT: type, x: i32, y: i32) VecT {
+            const vec_len = @typeInfo(VecT).vector.len;
+            const ux: u32 = @intCast(x);
+            const uy: u32 = @intCast(y);
+            const start_idx = uy * self.stride + ux;
+            return self.data[start_idx..][0..vec_len].*;
         }
     };
 }

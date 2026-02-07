@@ -131,7 +131,6 @@ pub fn GeneratorResult(
             const y_vec: CoordT = CastScalarCoordToVector(CoordT, y);
             return process_fn(self.context, x_vec, y_vec);
         }
-
     };
 }
 
@@ -166,7 +165,8 @@ pub fn Generate(
 
 /// Input accessor that provides neighborhood access for kernels.
 /// Supports configurable vector length and uses the source's padding policy.
-pub fn InputAccessor(comptime SourceType: type, comptime VecT: type) type {
+/// When unchecked=true, skips bounds checking for the interior fast path.
+pub fn InputAccessorGeneric(comptime SourceType: type, comptime VecT: type, comptime unchecked: bool) type {
     const ReturnType = if (@hasDecl(SourceType, "OutputType")) SourceType.OutputType else VecT;
 
     return struct {
@@ -183,11 +183,17 @@ pub fn InputAccessor(comptime SourceType: type, comptime VecT: type) type {
 
             // Check if source is a LoopResult (for expression trees) - has evalAt
             if (@hasDecl(SourceType, "evalAt")) {
-                // It's a LoopResult - call its eval function
-                return self.source.evalAt(x, y);
+                if (comptime unchecked and @hasDecl(SourceType, "evalAtUnchecked")) {
+                    return self.source.evalAtUnchecked(x, y);
+                } else {
+                    return self.source.evalAt(x, y);
+                }
             } else if (@hasDecl(SourceType, "readVec")) {
-                // Source is an InputSource with readVec method (vectorized SIMD read)
-                return self.source.readVec(VecT, x, y);
+                if (comptime unchecked and @hasDecl(SourceType, "readVecUnchecked")) {
+                    return self.source.readVecUnchecked(VecT, x, y);
+                } else {
+                    return self.source.readVec(VecT, x, y);
+                }
             } else {
                 @compileError("Invalid source type for InputAccessor: missing evalAt or readVec");
             }
@@ -198,6 +204,16 @@ pub fn InputAccessor(comptime SourceType: type, comptime VecT: type) type {
             return self.getAt(0, 0);
         }
     };
+}
+
+/// Standard input accessor with bounds checking (default).
+pub fn InputAccessor(comptime SourceType: type, comptime VecT: type) type {
+    return InputAccessorGeneric(SourceType, VecT, false);
+}
+
+/// Unchecked input accessor that skips bounds checking (for interior fast path).
+pub fn UncheckedInputAccessor(comptime SourceType: type, comptime VecT: type) type {
+    return InputAccessorGeneric(SourceType, VecT, true);
 }
 
 // ============================================================================
@@ -223,10 +239,23 @@ pub fn LoopResult(
         group_mod.GroupAccessor(SourceType, VecT, SourceType.group_width, SourceType.group_height)
     else
         InputAccessor(SourceType, VecT);
+
+    // Unchecked accessor for interior fast path (only for simple sources, not zip/group)
+    const UncheckedAccessorType = if (comptime is_zip_source)
+        zip_mod.ZipAccessor(SourceType, VecT)
+    else if (comptime is_group_source)
+        group_mod.GroupAccessor(SourceType, VecT, SourceType.group_width, SourceType.group_height)
+    else
+        UncheckedInputAccessor(SourceType, VecT);
+
     const vec_len = @typeInfo(VecT).vector.len;
 
     // Get the actual return type from the process function
     const ReturnType = ProcessReturnType(process_fn);
+
+    // Check if the source chain supports unchecked access
+    const source_has_unchecked = @hasDecl(SourceType, "readVecUnchecked") or
+        @hasDecl(SourceType, "evalAtUnchecked");
 
     return struct {
         source: SourceType,
@@ -241,6 +270,9 @@ pub fn LoopResult(
 
         /// Number of elements processed per evalAt call
         pub const vector_length = vec_len;
+
+        /// The margin used by this loop's kernel
+        pub const margin = opts.margin;
 
         const Self = @This();
 
@@ -262,6 +294,57 @@ pub fn LoopResult(
             } else {
                 return process_fn(self.context, accessor);
             }
+        }
+
+        /// Evaluate at a specific position without bounds checking.
+        /// Caller MUST guarantee that all accessed positions (including margin offsets)
+        /// are within the source's data region.
+        pub inline fn evalAtUnchecked(self: Self, x: i32, y: i32) ReturnType {
+            if (comptime !source_has_unchecked) {
+                return self.evalAt(x, y);
+            }
+            const accessor = UncheckedAccessorType{
+                .source = self.source,
+                .current_x = x,
+                .current_y = y,
+            };
+
+            if (comptime has_coords) {
+                const CoordT = opts.need_coordinates.?;
+                const CoordElemT = @typeInfo(CoordT).vector.child;
+                const iota = std.simd.iota(CoordElemT, vec_len);
+                const x_coords: CoordT = iota + CastScalarCoordToVector(CoordT, x);
+                const y_coords: CoordT = CastScalarCoordToVector(CoordT, y);
+                return process_fn(self.context, accessor, x_coords, y_coords);
+            } else {
+                return process_fn(self.context, accessor);
+            }
+        }
+
+        /// Returns the region where evalAtUnchecked can be safely called.
+        /// This is the source region deflated by the kernel's margin and vec_len.
+        /// For position x in this region, all reads x-margin.left .. x+margin.right+vec_len-1
+        /// are guaranteed in-bounds of the source data.
+        /// Returns an empty region if the margin is zero (no benefit from split iteration)
+        /// or if the source doesn't support unchecked access.
+        pub fn getInteriorRegion(self: Self) Region {
+            if (comptime !source_has_unchecked or opts.margin.isZero()) {
+                // No unchecked path available or no margin → no benefit from split
+                return .{ .x = 0, .y = 0, .width = 0, .height = 0 };
+            }
+            // The source region is where data is available
+            const src_region = self.region;
+            // Deflate by margin to get where all margin reads are in-bounds
+            // Left: need margin.left pixels to the left
+            // Right: need margin.right + vec_len - 1 pixels to the right (for the vector read)
+            // Top: need margin.top rows above
+            // Bottom: need margin.bottom rows below
+            return src_region.deflated(
+                @intCast(opts.margin.left),
+                @intCast(opts.margin.top),
+                @as(i32, @intCast(opts.margin.right)) + vec_len - 1,
+                @intCast(opts.margin.bottom),
+            );
         }
 
         pub fn getRegion(self: Self) Region {
@@ -320,6 +403,11 @@ fn getSourceVecLen(comptime SourceType: type) ?comptime_int {
 /// Supports both single-channel and multi-channel sources.
 /// The destination region drives what gets computed (pull model).
 /// The destination must have write() and writeScalar() methods matching the source output type.
+///
+/// When the source supports it (LoopResult with margins over an InputSource),
+/// splits each row into left-edge / interior / right-edge strips. The interior
+/// strip uses unchecked reads (no bounds checking), which eliminates per-vector
+/// bounds comparisons for the majority of pixels.
 pub fn Process(source: anytype, dest: anytype) void {
     const region = dest.region;
     const SourceType = @TypeOf(source);
@@ -332,32 +420,162 @@ pub fn Process(source: anytype, dest: anytype) void {
     // Accumulators like Stats do not support this and must use scalar remainder handling
     const supports_overlapping_writes = @hasDecl(DestType, "supports_overlapping_writes") and DestType.supports_overlapping_writes;
 
+    // Check if source supports split iteration (unchecked interior path)
+    const has_unchecked = @hasDecl(SourceType, "evalAtUnchecked") or @hasDecl(SourceType, "readVecUnchecked");
+    const has_interior = @hasDecl(SourceType, "getInteriorRegion") and has_unchecked;
+
+    if (has_interior) {
+        const interior = source.getInteriorRegion();
+        // Only use split path if interior region is non-empty
+        if (interior.width > 0 and interior.height > 0) {
+            processSplit(SourceType, DestType, source, dest, region, interior, vec_len, supports_overlapping_writes);
+            return;
+        }
+    }
+
+    // Standard path (no split optimization)
+    processStandard(SourceType, DestType, source, dest, region, vec_len, supports_overlapping_writes);
+}
+
+/// Standard processing path without split iteration.
+fn processStandard(
+    comptime SourceType: type,
+    comptime DestType: type,
+    source: SourceType,
+    dest: DestType,
+    region: Region,
+    comptime vec_len: comptime_int,
+    comptime supports_overlapping_writes: bool,
+) void {
+    for (0..region.height) |y| {
+        const y_coord: i32 = @as(i32, @intCast(y)) + region.y;
+        processRowChecked(SourceType, DestType, source, dest, region.x, region.x + @as(i32, @intCast(region.width)), y_coord, vec_len, supports_overlapping_writes);
+    }
+}
+
+/// Split processing path: left-edge (checked) / interior (unchecked) / right-edge (checked).
+fn processSplit(
+    comptime SourceType: type,
+    comptime DestType: type,
+    source: SourceType,
+    dest: DestType,
+    region: Region,
+    interior: Region,
+    comptime vec_len: comptime_int,
+    comptime supports_overlapping_writes: bool,
+) void {
+    const dst_x = region.x;
+    const dst_stop_x = region.x + @as(i32, @intCast(region.width));
+
+    // Interior X bounds (clamped to destination region)
+    const int_x_start = @max(dst_x, interior.x);
+    const int_x_stop = @min(dst_stop_x, interior.stopX());
+
     for (0..region.height) |y| {
         const y_coord: i32 = @as(i32, @intCast(y)) + region.y;
 
-        // Process full vectors
-        var x: i32 = 0;
-        while (x + vec_len <= region.width) : (x += vec_len) {
-            const x_coord: i32 = @as(i32, @intCast(x)) + region.x;
+        // Check if this row is within the interior's Y range
+        const y_in_interior = y_coord >= interior.y and y_coord < interior.stopY();
+
+        if (y_in_interior and int_x_start < int_x_stop) {
+            // Left edge: checked path
+            if (dst_x < int_x_start) {
+                processRowChecked(SourceType, DestType, source, dest, dst_x, int_x_start, y_coord, vec_len, supports_overlapping_writes);
+            }
+
+            // Interior: unchecked fast path
+            {
+                var x_coord: i32 = int_x_start;
+                while (x_coord + vec_len <= int_x_stop) : (x_coord += vec_len) {
+                    const result = blk: {
+                        if (@hasDecl(SourceType, "evalAtUnchecked")) {
+                            break :blk source.evalAtUnchecked(x_coord, y_coord);
+                        } else if (@hasDecl(SourceType, "readVecUnchecked")) {
+                            break :blk source.readVecUnchecked(@Vector(vec_len, SourceType.OutputScalarType), x_coord, y_coord);
+                        } else {
+                            @compileError("Source must have evalAtUnchecked or readVecUnchecked for split iteration");
+                        }
+                    };
+                    dest.write(@intCast(x_coord), @intCast(y_coord), result);
+                }
+                // Interior remainder (still unchecked, use overlapping write if possible)
+                if (x_coord < int_x_stop) {
+                    if (supports_overlapping_writes and int_x_stop - int_x_start >= vec_len) {
+                        const aligned_x = int_x_stop - vec_len;
+                        const result = blk: {
+                            if (@hasDecl(SourceType, "evalAtUnchecked")) {
+                                break :blk source.evalAtUnchecked(aligned_x, y_coord);
+                            } else if (@hasDecl(SourceType, "readVecUnchecked")) {
+                                break :blk source.readVecUnchecked(@Vector(vec_len, SourceType.OutputScalarType), aligned_x, y_coord);
+                            } else {
+                                @compileError("Source must have evalAtUnchecked or readVecUnchecked for split iteration");
+                            }
+                        };
+                        dest.write(@intCast(aligned_x), @intCast(y_coord), result);
+                    } else {
+                        // Fall back to checked for remaining interior pixels
+                        processRowChecked(SourceType, DestType, source, dest, x_coord, int_x_stop, y_coord, vec_len, supports_overlapping_writes);
+                    }
+                }
+            }
+
+            // Right edge: checked path
+            if (int_x_stop < dst_stop_x) {
+                processRowChecked(SourceType, DestType, source, dest, int_x_stop, dst_stop_x, y_coord, vec_len, supports_overlapping_writes);
+            }
+        } else {
+            // Entire row is in edge zone: use checked path
+            processRowChecked(SourceType, DestType, source, dest, dst_x, dst_stop_x, y_coord, vec_len, supports_overlapping_writes);
+        }
+    }
+}
+
+/// Process a row segment [x_start, x_stop) using checked (bounds-checking) reads.
+fn processRowChecked(
+    comptime SourceType: type,
+    comptime DestType: type,
+    source: SourceType,
+    dest: DestType,
+    x_start: i32,
+    x_stop: i32,
+    y_coord: i32,
+    comptime vec_len: comptime_int,
+    comptime supports_overlapping_writes: bool,
+) void {
+    const width = x_stop - x_start;
+    if (width <= 0) return;
+
+    // Process full vectors
+    var x_coord: i32 = x_start;
+    while (x_coord + vec_len <= x_stop) : (x_coord += vec_len) {
+        const result = blk: {
+            if (@hasDecl(SourceType, "evalAt")) {
+                break :blk source.evalAt(x_coord, y_coord);
+            } else if (@hasDecl(SourceType, "readVec")) {
+                break :blk source.readVec(@Vector(vec_len, SourceType.OutputScalarType), x_coord, y_coord);
+            } else {
+                @compileError("Source must have evalAt or readVec method");
+            }
+        };
+        dest.write(@intCast(x_coord), @intCast(y_coord), result);
+    }
+
+    // Handle remaining pixels
+    if (x_coord < x_stop) {
+        if (supports_overlapping_writes and width >= vec_len) {
+            const aligned_x = x_stop - vec_len;
             const result = blk: {
                 if (@hasDecl(SourceType, "evalAt")) {
-                    break :blk source.evalAt(x_coord, y_coord);
+                    break :blk source.evalAt(aligned_x, y_coord);
                 } else if (@hasDecl(SourceType, "readVec")) {
-                    break :blk source.readVec(@Vector(vec_len, SourceType.OutputScalarType), x_coord, y_coord);
+                    break :blk source.readVec(@Vector(vec_len, SourceType.OutputScalarType), aligned_x, y_coord);
                 } else {
                     @compileError("Source must have evalAt or readVec method");
                 }
             };
-            dest.write(@intCast(x_coord), @intCast(y_coord), result);
-        }
-
-        // Handle remaining pixels
-        if (x < region.width) {
-            if (supports_overlapping_writes and vec_len <= region.width) {
-                // Optimization: shift x back to process the last vec_len pixels as a full vector
-                // This overlaps with already-written pixels but is safe for idempotent destinations
-                const aligned_x = region.width - vec_len;
-                const x_coord: i32 = @as(i32, @intCast(aligned_x)) + region.x;
+            dest.write(@intCast(aligned_x), @intCast(y_coord), result);
+        } else {
+            while (x_coord < x_stop) : (x_coord += 1) {
                 const result = blk: {
                     if (@hasDecl(SourceType, "evalAt")) {
                         break :blk source.evalAt(x_coord, y_coord);
@@ -367,23 +585,7 @@ pub fn Process(source: anytype, dest: anytype) void {
                         @compileError("Source must have evalAt or readVec method");
                     }
                 };
-
-                dest.write(@intCast(x_coord), @intCast(y_coord), result);
-            } else {
-                // Scalar fallback for accumulators or narrow regions
-                while (x < region.width) : (x += 1) {
-                    const x_coord: i32 = @as(i32, @intCast(x)) + region.x;
-                    const result = blk: {
-                        if (@hasDecl(SourceType, "evalAt")) {
-                            break :blk source.evalAt(x_coord, y_coord);
-                        } else if (@hasDecl(SourceType, "readVec")) {
-                            break :blk source.readVec(@Vector(vec_len, SourceType.OutputScalarType), x_coord, y_coord);
-                        } else {
-                            @compileError("Source must have evalAt or readVec method");
-                        }
-                    };
-                    dest.writeScalar(@intCast(x_coord), @intCast(y_coord), result);
-                }
+                dest.writeScalar(@intCast(x_coord), @intCast(y_coord), result);
             }
         }
     }

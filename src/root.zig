@@ -29,7 +29,7 @@ const loop = @import("loop.zig");
 /// Default vector length - uses platform optimal size based on u8 processing
 pub const suggested_vec_len = std.simd.suggestVectorLength(u8) orelse 1;
 pub const f32v = @Vector(std.simd.suggestVectorLength(f32) orelse 1, f32);
-pub const i32v = @Vector(std.simd.suggestVectorLength(u16) orelse 1, i32);
+pub const i32v = @Vector(std.simd.suggestVectorLength(i32) orelse 1, i32);
 pub const u16v = @Vector(std.simd.suggestVectorLength(u16) orelse 1, u16);
 pub const u8v = @Vector(std.simd.suggestVectorLength(u8) orelse 1, u8);
 

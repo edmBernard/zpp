@@ -60,6 +60,12 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_tests.step);
 
+    // Install the test binary so it can be launched under a debugger.
+    // After `zig build test-install`, the binary is at zig-out/bin/zpp-tests.
+    const install_tests = b.addInstallArtifact(tests, .{});
+    const test_install_step = b.step("test-install", "Build and install test binary for debugging");
+    test_install_step.dependOn(&install_tests.step);
+
     // =========================================================================
     // MARK: Examples
     // =========================================================================
