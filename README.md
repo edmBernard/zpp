@@ -366,4 +366,4 @@ This project is licensed under the Apache License 2.0.
 
 ## Disclaimer
 
-It's a toy project. I'm not really good at Zig and the current implementation is mainly written by an LLM. Use it at your own risk. If you spot error, improvement, comments are welcome.
+It's a toy project. I'm not really good at Zig and the current implementation is mainly written by an LLM. Tests are mainly written by hand. Use it at your own risk. If you spot error, improvement, comments are welcome.
