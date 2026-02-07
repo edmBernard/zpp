@@ -81,55 +81,54 @@ test "Zip: fill two destination" {
     try std.testing.expectEqual(expected_data_b, output_data_b);
 }
 
-// TODO: this test should work
-// // MARK: Zip: Can chained several zip kernels together
-// test "Zip: Can chained several zip kernels together" {
-//     // first kernel produce 3 outputs, second kernel takes 3 inputs and produces 2 outputs
-//     const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
+// MARK: Zip: Can chained several zip kernels together
+test "Zip: Can chained several zip kernels together" {
+    // first kernel produce 3 outputs, second kernel takes 3 inputs and produces 2 outputs
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
 
-//     var input_data: [8]f32 = undefined;
-//     th.fillRamp(f32, &input_data, 1, 1);
+    var input_data: [8]f32 = undefined;
+    th.fillRamp(f32, &input_data, 1, 1);
 
-//     var output_data_a = [_]f32{0} ** 8;
-//     var output_data_b = [_]f32{0} ** 8;
+    var output_data_a = [_]f32{0} ** 8;
+    var output_data_b = [_]f32{0} ** 8;
 
-//     const source = zpp.In(f32, &input_data, region.width, region);
-//     const destination_a = zpp.Out(f32, &output_data_a, region.width, region);
-//     const destination_b = zpp.Out(f32, &output_data_b, region.width, region);
+    const source = zpp.In(f32, &input_data, region.width, region);
+    const destination_a = zpp.Out(f32, &output_data_a, region.width, region);
+    const destination_b = zpp.Out(f32, &output_data_b, region.width, region);
 
-//     const zipped = zpp.ZipOut(.{ destination_a, destination_b });
+    const zipped = zpp.ZipOut(.{ destination_a, destination_b });
 
-//     const kernel_1 = struct {
-//         fn process(ctx: anytype, in: anytype) struct { f32x4, f32x4, f32x4 } {
-//             _ = ctx;
-//             const value = in.get();
-//             return .{ value, value * th.splatWithCast(f32x4, 10), value * th.splatWithCast(f32x4, 100) };
-//         }
-//     };
-//     const kernel_2 = struct {
-//         fn process(ctx: anytype, in: anytype) struct { f32x4, f32x4 } {
-//             _ = ctx;
-//             const a, const b, const c = in.get();
-//             return .{ a, b + c };
-//         }
-//     };
+    const kernel_1 = struct {
+        fn process(ctx: anytype, in: anytype) struct { f32x4, f32x4, f32x4 } {
+            _ = ctx;
+            const value = in.get();
+            return .{ value, value * th.splatWithCast(f32x4, 10), value * th.splatWithCast(f32x4, 100) };
+        }
+    };
+    const kernel_2 = struct {
+        fn process(ctx: anytype, in: anytype) struct { f32x4, f32x4 } {
+            _ = ctx;
+            const a, const b, const c = in.get();
+            return .{ a, b + c };
+        }
+    };
 
-//     const result_kernel_1 = zpp.Loop(f32x4, .{}, source, .{}, kernel_1.process);
-//     const result_kernel_2 = zpp.Loop(f32x4, .{}, result_kernel_1, .{}, kernel_2.process);
-//     zpp.Process(result_kernel_2, zipped);
+    const result_kernel_1 = zpp.Loop(f32x4, .{}, source, .{}, kernel_1.process);
+    const result_kernel_2 = zpp.Loop(f32x4, .{}, result_kernel_1, .{}, kernel_2.process);
+    zpp.Process(result_kernel_2, zipped);
 
-//     // output = input_a + input_b = [1+10, 2+20, 3+30, ..., 8+80]
-//     const expected_data_a = [_]f32{
-//         1, 2, 3, 4,
-//         5, 6, 7, 8,
-//     };
-//     try std.testing.expectEqual(expected_data_a, output_data_a);
-//     const expected_data_b = [_]f32{
-//         220,  440,  660,  880,
-//         1100, 1320, 1540, 1760,
-//     };
-//     try std.testing.expectEqual(expected_data_b, output_data_b);
-// }
+    // output = input_a + input_b = [1+10, 2+20, 3+30, ..., 8+80]
+    const expected_data_a = [_]f32{
+        1, 2, 3, 4,
+        5, 6, 7, 8,
+    };
+    try std.testing.expectEqual(expected_data_a, output_data_a);
+    const expected_data_b = [_]f32{
+        110,  220,  330,  440,
+        550,  660,  770,  880,
+    };
+    try std.testing.expectEqual(expected_data_b, output_data_b);
+}
 
 // MARK: Zip: Can zip destination and Stats together
 test "Zip: Can zip destination and Stats together" {

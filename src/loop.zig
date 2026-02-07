@@ -167,6 +167,8 @@ pub fn Generate(
 /// Input accessor that provides neighborhood access for kernels.
 /// Supports configurable vector length and uses the source's padding policy.
 pub fn InputAccessor(comptime SourceType: type, comptime VecT: type) type {
+    const ReturnType = if (@hasDecl(SourceType, "OutputType")) SourceType.OutputType else VecT;
+
     return struct {
         source: SourceType,
         current_x: i32,
@@ -175,7 +177,7 @@ pub fn InputAccessor(comptime SourceType: type, comptime VecT: type) type {
         const Self = @This();
 
         /// Get value at offset (for margin-based operations)
-        pub inline fn getAt(self: Self, dx: i32, dy: i32) VecT {
+        pub inline fn getAt(self: Self, dx: i32, dy: i32) ReturnType {
             const x = self.current_x + dx;
             const y = self.current_y + dy;
 
@@ -192,7 +194,7 @@ pub fn InputAccessor(comptime SourceType: type, comptime VecT: type) type {
         }
 
         /// Get current value (no offset) - for identity operations
-        pub inline fn get(self: Self) VecT {
+        pub inline fn get(self: Self) ReturnType {
             return self.getAt(0, 0);
         }
     };
