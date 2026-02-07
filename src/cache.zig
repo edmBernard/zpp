@@ -5,11 +5,11 @@
 
 const std = @import("std");
 const region_mod = @import("region.zig");
-const padding_mod = @import("padding.zig");
+const loop_mod = @import("loop.zig");
 const zip_mod = @import("zip.zig");
 
 const Region = region_mod.Region;
-const DefaultLoopOptions = padding_mod.DefaultLoopOptions;
+const DefaultLoopOptions = loop_mod.DefaultLoopOptions;
 
 // Forward declaration - these will be resolved at comptime
 // InputAccessor and ZipAccessor are imported from loop.zig and zip.zig respectively
@@ -149,7 +149,6 @@ pub fn CachedLoopResult(
     const is_zip_source = zip_mod.isZipSourceType(SrcType);
 
     // Import the accessor types - these need to be resolved at comptime
-    const loop_mod = @import("loop.zig");
     const AccessorType = if (is_zip_source)
         zip_mod.ZipAccessor(SrcType, VecT)
     else
@@ -305,7 +304,6 @@ pub fn ProcessCached(comptime ElemT: type, source: anytype, dest: anytype, alloc
         }
     } else {
         // Fallback to non-cached processing
-        const loop_mod = @import("loop.zig");
         loop_mod.Process(ElemT, source, dest);
     }
 }

@@ -81,7 +81,7 @@ test "Zip: fill two destination" {
     try std.testing.expectEqual(expected_data_b, output_data_b);
 }
 
-// TODO: Fix this test
+// TODO: this test should work
 // // MARK: Zip: Can chained several zip kernels together
 // test "Zip: Can chained several zip kernels together" {
 //     // first kernel produce 3 outputs, second kernel takes 3 inputs and produces 2 outputs
@@ -131,7 +131,6 @@ test "Zip: fill two destination" {
 //     try std.testing.expectEqual(expected_data_b, output_data_b);
 // }
 
-// TODO: add similar test in cahcing to verify that in this case the transformed value are cached
 // MARK: Zip: Can zip destination and Stats together
 test "Zip: Can zip destination and Stats together" {
     // we transform the input and write to both a normal destination and a Stats accumulator

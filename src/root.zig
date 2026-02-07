@@ -47,8 +47,6 @@ pub const marginI = region.marginI;
 // Padding module
 pub const ZeroPadding = padding.ZeroPadding;
 pub const RepeatEdgePadding = padding.RepeatEdgePadding;
-pub const LoopOptions = padding.LoopOptions;
-pub const DefaultLoopOptions = padding.DefaultLoopOptions;
 
 // Sources module
 pub const In = sources.In;
@@ -73,6 +71,8 @@ pub const StatsWithCoords = stats.StatsWithCoords;
 // Interpolation module
 pub const InterpolationMethod = interpolation.InterpolationMethod;
 pub const InterpLoop = interpolation.InterpLoop;
+pub const LoopOptions = loop.LoopOptions;
+pub const DefaultLoopOptions = loop.DefaultLoopOptions;
 
 // Cache module
 pub const RowCache = cache.RowCache;

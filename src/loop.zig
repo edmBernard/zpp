@@ -115,7 +115,6 @@ pub fn GeneratorResult(
     // Determine the output type from the process function's return type
     return struct {
         context: ContextType,
-        region: Region,
 
         const Self = @This();
 
@@ -133,9 +132,6 @@ pub fn GeneratorResult(
             return process_fn(self.context, x_vec, y_vec);
         }
 
-        pub fn getRegion(self: Self) Region {
-            return self.region;
-        }
     };
 }
 
@@ -156,13 +152,11 @@ inline fn CastScalarCoordToVector(comptime CoordT: type, value: i32) CoordT {
 /// The vector length is inferred from the VecT type.
 pub fn Generate(
     comptime VecT: type,
-    region: Region,
     context: anytype,
     comptime process_fn: anytype,
 ) GeneratorResult(VecT, @TypeOf(context), process_fn, @typeInfo(VecT).vector.len) {
     return .{
         .context = context,
-        .region = region,
     };
 }
 

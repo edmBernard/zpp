@@ -223,7 +223,7 @@ test "Loop: generator with coordinates at non-origin region" {
                 }
             };
 
-            const generator = zpp.Generate(CoordType, region, .{}, gen_kernel.process);
+            const generator = zpp.Generate(CoordType, .{}, gen_kernel.process);
             zpp.Process(generator, destination);
 
             const expected_data: [image_width * image_height]ScalarType = .{

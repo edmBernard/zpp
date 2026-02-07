@@ -29,7 +29,7 @@ test "Generator: produce correct coordinates type: smaller region than batch siz
                 }
             };
 
-            const result = zpp.Generate(CoordType, region, .{}, processing_kernel.process);
+            const result = zpp.Generate(CoordType, .{}, processing_kernel.process);
             zpp.Process(result, destination);
 
             try std.testing.expectEqual(@as(ScalarType, 0.0), output[0]);
@@ -61,7 +61,7 @@ test "Generator: produce correct coordinates type: larger region than batch size
                 }
             };
 
-            const result = zpp.Generate(CoordType, region, .{}, processing_kernel.process);
+            const result = zpp.Generate(CoordType, .{}, processing_kernel.process);
             zpp.Process(result, destination);
 
             var expectedOutput = [_]ScalarType{0} ** 16;
@@ -97,7 +97,7 @@ test "Generator: produce correct coordinates type: region width not multiple of 
                 }
             };
 
-            const result = zpp.Generate(CoordType, region, .{}, processing_kernel.process);
+            const result = zpp.Generate(CoordType, .{}, processing_kernel.process);
             zpp.Process(result, destination);
 
             var expectedOutput = [_]ScalarType{0} ** 20;
@@ -136,8 +136,7 @@ test "Generator: Only fill requested region: Same global size, different regions
                     return th.vectorCast(OutputType, x) + th.vectorCast(OutputType, y) * th.splatWithCast(OutputType, 10);
                 }
             };
-            // TODO: does generator need the region ?
-            const result = zpp.Generate(CoordType, output_region, .{}, processing_kernel.process);
+            const result = zpp.Generate(CoordType, .{}, processing_kernel.process);
             zpp.Process(result, destination);
 
             const expected_data: [45]ScalarType = .{

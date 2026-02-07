@@ -145,7 +145,6 @@ test "Stats destination: compute on the given region" {
 
     const source = zpp.In(f32, &input_data, region_in.width, region_in);
 
-    // TODO: it should work even without this intermediate kernel
     const id_kernel = struct {
         const Context = struct {};
         fn process(ctx: Context, in: anytype) f32x4 {
