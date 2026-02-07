@@ -194,6 +194,16 @@ pub const Region = struct {
         };
     }
 
+    /// Returns a region shifted by (dx, dy) — same size, moved origin.
+    pub fn shifted(self: Self, dx: i32, dy: i32) Self {
+        return .{
+            .x = self.x + dx,
+            .y = self.y + dy,
+            .width = self.width,
+            .height = self.height,
+        };
+    }
+
     /// Returns the smallest region containing both regions a and b.
     pub fn Union(self: Self, b: Self) Self {
         const new_x = @min(self.x, b.x);

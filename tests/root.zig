@@ -18,4 +18,5 @@ comptime {
     _ = @import("interpolation_test.zig");
     _ = @import("integration_test.zig");
     _ = @import("cache_test.zig");
+    _ = @import("translate_test.zig");
 }

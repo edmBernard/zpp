@@ -15,6 +15,7 @@ const region = @import("region.zig");
 const padding = @import("padding.zig");
 const math = @import("math.zig");
 const sources = @import("sources.zig");
+const translate = @import("translate.zig");
 const zip = @import("zip.zig");
 const group = @import("group.zig");
 const stats = @import("stats.zig");
@@ -54,6 +55,9 @@ pub const In = sources.In;
 pub const InWithPadding = sources.InWithPadding;
 pub const Out = sources.Out;
 pub const InterleavedOut = sources.InterleavedOut;
+
+// Translate module
+pub const Translate = translate.Translate;
 
 // Zip module
 pub const Zip = zip.Zip;
