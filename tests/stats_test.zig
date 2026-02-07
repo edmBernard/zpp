@@ -175,37 +175,36 @@ test "Stats destination: compute on the given region" {
     try std.testing.expectEqual(@as(f32, 144), stats_ctx.sum_val);
 }
 
-// TODO: this test should work
-// // MARK: Stats destination: compute stat directly from source
-// test "Stats destination: compute stat directly from source" {
-//     const image_width = 9;
-//     const image_height = 5;
-//     const region_in: zpp.Region = .{ .x = 0, .y = 0, .width = image_width, .height = image_height };
-//     const region_stat: zpp.Region = .{ .x = 2, .y = 1, .width = 4, .height = 2 };
+// MARK: Stats destination: compute stat directly from source
+test "Stats destination: compute stat directly from source" {
+    const image_width = 9;
+    const image_height = 5;
+    const region_in: zpp.Region = .{ .x = 0, .y = 0, .width = image_width, .height = image_height };
+    const region_stat: zpp.Region = .{ .x = 2, .y = 1, .width = 4, .height = 2 };
 
-//     var input_data = [_]f32{0} ** (image_width * image_height);
-//     th.fillRamp(f32, &input_data, 1, 1);
+    var input_data = [_]f32{0} ** (image_width * image_height);
+    th.fillRamp(f32, &input_data, 1, 1);
 
-//     const source = zpp.In(f32, &input_data, region_in.width, region_in);
+    const source = zpp.In(f32, &input_data, region_in.width, region_in);
 
-//     const stat_kernel = struct {
-//         const Context = struct {
-//             sum_val: f32 = 0,
-//         };
+    const stat_kernel = struct {
+        const Context = struct {
+            sum_val: f32 = 0,
+        };
 
-//         fn accumulate(ctx: *Context, values: anytype) void {
-//             ctx.sum_val += @reduce(.Add, values);
-//         }
-//     };
+        fn accumulate(ctx: *Context, values: anytype) void {
+            ctx.sum_val += @reduce(.Add, values);
+        }
+    };
 
-//     var stats_ctx = stat_kernel.Context{};
-//     const stats_dest = zpp.Stats(f32x4, &stats_ctx, region_stat, stat_kernel.accumulate);
-//     zpp.Process(source, stats_dest);
+    var stats_ctx = stat_kernel.Context{};
+    const stats_dest = zpp.Stats(f32x4, &stats_ctx, region_stat, stat_kernel.accumulate);
+    zpp.Process(source, stats_dest);
 
-//     // 0, 0, 0,  0,  0,  0,  0, 0, 0,
-//     // 0, 0, 12, 13, 14, 15, 0, 0, 0,
-//     // 0, 0, 21, 22, 23, 24, 0, 0, 0,
-//     // 0, 0, 0,  0,  0,  0,  0, 0, 0,
-//     // 0, 0, 0,  0,  0,  0,  0, 0, 0,
-//     try std.testing.expectEqual(@as(f32, 144), stats_ctx.sum_val);
-// }
+    // 0, 0, 0,  0,  0,  0,  0, 0, 0,
+    // 0, 0, 12, 13, 14, 15, 0, 0, 0,
+    // 0, 0, 21, 22, 23, 24, 0, 0, 0,
+    // 0, 0, 0,  0,  0,  0,  0, 0, 0,
+    // 0, 0, 0,  0,  0,  0,  0, 0, 0,
+    try std.testing.expectEqual(@as(f32, 144), stats_ctx.sum_val);
+}

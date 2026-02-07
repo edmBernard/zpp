@@ -28,6 +28,7 @@ pub fn StatsDest(
         region: Region,
 
         pub const InputType = @typeInfo(VecT).vector.child;
+        pub const InputScalarType = InputType;
         const Self = @This();
 
         /// "Write" a SIMD batch by calling the stats function
