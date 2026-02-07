@@ -8,7 +8,7 @@ const u8x4 = @Vector(4, u8);
 
 const AllTypes = [_]type{ f32x4, u16x4, u8x4 };
 
-test "Generator: produce correct coordinates type: smaller width than batch size" {
+test "Generator: produce correct coordinates type: smaller region than batch size" {
     const region: zpp.Region = .{ .x = 0, .y = 0, .width = 2, .height = 2 };
 
     inline for (AllTypes) |CoordType| {
@@ -40,7 +40,7 @@ test "Generator: produce correct coordinates type: smaller width than batch size
     }
 }
 
-test "Generator: produce correct coordinates type: larger width than batch size" {
+test "Generator: produce correct coordinates type: larger region than batch size" {
     const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 4 };
 
     inline for (AllTypes) |CoordType| {
@@ -76,7 +76,7 @@ test "Generator: produce correct coordinates type: larger width than batch size"
     }
 }
 
-test "Generator: produce correct coordinates type: width not multiple of batch size" {
+test "Generator: produce correct coordinates type: region width not multiple of batch size" {
     const region: zpp.Region = .{ .x = 0, .y = 0, .width = 5, .height = 4 };
 
     inline for (AllTypes) |CoordType| {
