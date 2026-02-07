@@ -77,8 +77,6 @@ pub const DefaultLoopOptions = loop.DefaultLoopOptions;
 // Cache module
 pub const RowCache = cache.RowCache;
 pub const CachedLoop = cache.CachedLoop;
-pub const ProcessCached = cache.ProcessCached;
-
 // Loop module (core processing)
 pub const Loop = loop.Loop;
 pub const Generate = loop.Generate;

@@ -133,8 +133,9 @@ pub fn RowCache(comptime T: type, comptime max_rows: usize) type {
 }
 
 /// A cached loop result that stores intermediate rows to avoid recomputation.
-/// This is the caching version of LoopResult, used when expression trees have
-/// vertical margins (need rows above/below the current row).
+/// This is the caching version of LoopResult
+/// The cache is heap-allocated so that copies of this struct (e.g. in Zip)
+/// share the same underlying cache, ensuring rows are computed only once.
 pub fn CachedLoopResult(
     comptime VecT: type,
     comptime SrcType: type,
@@ -154,27 +155,26 @@ pub fn CachedLoopResult(
     else
         loop_mod.InputAccessor(SrcType, VecT);
 
+    const Cache = RowCache(ElemT, max_cache_rows);
+
     return struct {
         source: SrcType,
         context: CtxType,
         region: Region,
-        cache: RowCache(ElemT, max_cache_rows),
+        cache: *Cache,
+        allocator: std.mem.Allocator,
 
         const Self = @This();
+        pub const vector_length = vec_len;
 
-        /// Initialize the cache for processing.
-        pub fn initCache(self: *Self, allocator: std.mem.Allocator) !void {
-            self.cache = RowCache(ElemT, max_cache_rows).init(allocator);
-            try self.cache.setup(self.region.width, opts.margin.top, opts.margin.bottom);
-        }
-
-        /// Free cache memory.
-        pub fn deinitCache(self: *Self) void {
+        /// Free cache memory and the heap allocation.
+        pub fn deinit(self: Self) void {
             self.cache.deinit();
+            self.allocator.destroy(self.cache);
         }
 
         /// Ensure rows needed for position (x, y) are computed and cached.
-        fn ensureRowsCached(self: *Self, y: i32) void {
+        fn ensureRowsCached(self: Self, y: i32) void {
             const y64: i64 = y;
             const above: i64 = opts.margin.top;
             const below: i64 = opts.margin.bottom;
@@ -190,7 +190,7 @@ pub fn CachedLoopResult(
         }
 
         /// Compute a single row and store it in the cache.
-        fn computeRow(self: *Self, y: i64) void {
+        fn computeRow(self: Self, y: i64) void {
             const row_buffer = self.cache.getRowBuffer(y);
             const y32: i32 = @intCast(y);
 
@@ -225,7 +225,7 @@ pub fn CachedLoopResult(
         }
 
         /// Evaluate at a specific position, using cached data.
-        pub fn evalAt(self: *Self, x: i32, y: i32) VecT {
+        pub fn evalAt(self: Self, x: i32, y: i32) VecT {
             // Ensure needed rows are cached
             self.ensureRowsCached(y);
 
@@ -250,6 +250,7 @@ pub fn CachedLoopResult(
 /// Create a cached processing loop.
 /// Use this when you have vertical margins and want to avoid recomputing rows.
 /// The cache size should be at least `margin.top + 1 + margin.bottom`.
+/// The cache is heap-allocated so that copies share the same underlying data.
 pub fn CachedLoop(
     comptime VecT: type,
     comptime opts: DefaultLoopOptions,
@@ -257,8 +258,11 @@ pub fn CachedLoop(
     source: anytype,
     context: anytype,
     comptime process_fn: anytype,
-) CachedLoopResult(VecT, @TypeOf(source), @TypeOf(context), process_fn, opts, max_cache_rows) {
+    allocator: std.mem.Allocator,
+) !CachedLoopResult(VecT, @TypeOf(source), @TypeOf(context), process_fn, opts, max_cache_rows) {
     const SrcType = @TypeOf(source);
+    const ElemT = @typeInfo(VecT).vector.child;
+    const Cache = RowCache(ElemT, max_cache_rows);
 
     const region = if (@hasDecl(SrcType, "getRegion"))
         source.getRegion()
@@ -267,43 +271,17 @@ pub fn CachedLoop(
     else
         @compileError("Source must have a region field or getRegion method");
 
+    const cache = try allocator.create(Cache);
+    errdefer allocator.destroy(cache);
+    cache.* = Cache.init(allocator);
+    errdefer cache.deinit();
+    try cache.setup(region.width, opts.margin.top, opts.margin.bottom);
+
     return .{
         .source = source,
         .context = context,
         .region = region,
-        .cache = undefined, // Must call initCache before use
+        .cache = cache,
+        .allocator = allocator,
     };
-}
-
-/// Process with caching enabled.
-/// This version materializes intermediate results when there are vertical margins,
-/// avoiding redundant computation in expression trees.
-pub fn ProcessCached(comptime ElemT: type, source: anytype, dest: anytype, allocator: std.mem.Allocator) !void {
-    const SourceType = @TypeOf(source);
-
-    // Check if source has a cache that needs initialization
-    if (@hasDecl(SourceType, "initCache")) {
-        var mutable_source = source;
-        try mutable_source.initCache(allocator);
-        defer mutable_source.deinitCache();
-
-        const region = mutable_source.getRegion();
-        const vec_len = SourceType.vector_length;
-
-        var y: u32 = 0;
-        while (y < region.height) : (y += 1) {
-            var x: u32 = 0;
-            while (x + vec_len <= region.width) : (x += @intCast(vec_len)) {
-                const result = mutable_source.evalAt(@as(i32, @intCast(x)) + region.x, @as(i32, @intCast(y)) + region.y);
-                dest.write(x, y, result);
-            }
-            while (x < region.width) : (x += 1) {
-                const result = mutable_source.evalAt(@as(i32, @intCast(x)) + region.x, @as(i32, @intCast(y)) + region.y);
-                dest.writeScalar(x, y, result);
-            }
-        }
-    } else {
-        // Fallback to non-cached processing
-        loop_mod.Process(ElemT, source, dest);
-    }
 }
