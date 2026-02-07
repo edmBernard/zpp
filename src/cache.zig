@@ -21,7 +21,7 @@ const DefaultLoopOptions = loop_mod.DefaultLoopOptions;
 /// The cache stores `num_rows` rows in a circular manner. When row Y is requested,
 /// it is stored in slot `Y mod num_rows`. The cache tracks which actual image row
 /// is stored in each slot to determine if recomputation is needed.
-pub fn RowCache(comptime T: type, comptime max_rows: usize) type {
+fn RowCache(comptime T: type, comptime max_rows: usize) type {
     return struct {
         /// Storage for cached rows. Each row can hold `width` elements.
         data: [max_rows][]T,

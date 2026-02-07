@@ -80,8 +80,8 @@ pub fn main() !void {
     // Define processing region
     const region = zpp.Region{ .x = 0, .y = 0, .width = width, .height = height };
 
-    // Create RGB output destination
-    const dest = zpp.RgbOut(vec_len, data, width, region);
+    // Create RGB interleaved output destination (3 channels)
+    const dest = zpp.InterleavedOut(u8, 3, data, width, region);
 
     // Define kernel context and process function
     const GradientKernel = struct {
@@ -104,8 +104,8 @@ pub fn main() !void {
     };
 
     // Generate and process
-    const generator = zpp.Generate(VecF32, .{}, region, ctx, GradientKernel.process);
-    zpp.Process(u8, generator, dest);
+    const generator = zpp.Generate(VecF32, ctx, GradientKernel.process);
+    zpp.Process(generator, dest);
 
     // 'data' now contains the RGB image
 }
@@ -157,8 +157,8 @@ const source_zero = zpp.InWithPadding(f32, zpp.ZeroPadding, &input_data, stride,
 // Single-channel output
 const dest = zpp.Out(f32, &output_data, stride, region);
 
-// RGB interleaved output (automatically converts float [0,1] to u8 [0,255])
-const rgb_dest = zpp.RgbOut(vec_len, &rgb_data, width, region);
+// RGB interleaved output (3 channels, automatically converts float [0,1] to u8 [0,255])
+const rgb_dest = zpp.InterleavedOut(u8, 3, &rgb_data, width, region);
 ```
 
 ### Kernels
@@ -189,7 +189,7 @@ fn generateProcess(ctx: Context, x: VecF32, y: VecF32) VecF32 {
 **Generate** creates values from coordinates (no input source):
 
 ```zig
-const generator = zpp.Generate(VecF32, .{}, region, context, processFunc);
+const generator = zpp.Generate(VecF32, context, processFunc);
 ```
 
 **Loop** transforms input data through a kernel:
@@ -204,7 +204,7 @@ const result = zpp.Loop(VecF32, .{ .margin = zpp.marginI(1) }, source, context, 
 **Process** executes the pipeline and writes to destination:
 
 ```zig
-zpp.Process(f32, result, destination);
+zpp.Process(result, destination);
 ```
 
 ### Expression Trees
@@ -252,7 +252,7 @@ const resized = zpp.InterpLoop(
 | Module | Description |
 |--------|-------------|
 | `Region`, `Margin` | Rectangular areas and neighborhood specification |
-| `In`, `Out`, `RgbOut` | Input/output buffer wrappers |
+| `In`, `Out`, `InterleavedOut` | Input/output buffer wrappers |
 | `Generate`, `Loop`, `Process` | Core processing primitives |
 | `InterpLoop` | Interpolated sampling for geometric transforms |
 | `Zip`, `Unzip` | Combine/split multiple sources |
@@ -320,17 +320,32 @@ zig build run-gradient-filter
 
 ```
 src/
-├── root.zig        # Library entry point - re-exports all public API
-├── region.zig      # Region and Margin types
-├── sources.zig     # Input/Output buffer wrappers (In, Out, InterleavedOut)
-├── loop.zig        # Core processing primitives (Loop, Generate, Process)
-├── math.zig        # SIMD math functions (sin, cos, exp, pow, etc.)
+├── root.zig          # Library entry point - re-exports all public API
+├── region.zig        # Region and Margin types
+├── sources.zig       # Input/Output buffer wrappers (In, Out, InterleavedOut)
+├── loop.zig          # Core processing primitives (Loop, Generate, Process)
+├── math.zig          # SIMD math functions (sin, cos, exp, pow, etc.)
 ├── interpolation.zig # Interpolation methods (Nearest, Linear, Cubic)
-├── padding.zig     # Padding policies (ZeroPadding, RepeatEdgePadding)
-├── cache.zig       # Row caching for expression trees (RowCache, CachedLoop)
-├── zip.zig         # Zip/Unzip for multiple sources
-├── group.zig       # Group/Ungroup for Bayer patterns
-└── stats.zig       # Statistics accumulation (Stats, StatsWithCoords)
+├── padding.zig       # Padding policies (ZeroPadding, RepeatEdgePadding)
+├── cache.zig         # Row caching for expression trees (RowCache, CachedLoop)
+├── zip.zig           # Zip/Unzip for multiple sources
+├── group.zig         # Group/Ungroup for Bayer patterns
+└── stats.zig         # Statistics accumulation (Stats, StatsWithCoords)
+tests/
+├── root.zig              # Test entry point - imports all test modules
+├── test_helpers.zig      # Shared test utilities (fillRamp, vectorCast, etc.)
+├── region_test.zig       # Region and Margin tests
+├── sources_test.zig      # Input/Output source tests
+├── loop_test.zig         # Loop processing tests
+├── generate_test.zig     # Generate processing tests
+├── math_test.zig         # SIMD math function tests
+├── interpolation_test.zig # Interpolation tests
+├── padding_test.zig      # Padding policy tests
+├── cache_test.zig        # Row caching tests
+├── zip_test.zig          # Zip/Unzip tests
+├── group_test.zig        # Group/Ungroup tests
+├── stats_test.zig        # Statistics tests
+└── integration_test.zig  # Cross-module integration tests
 ```
 
 ## Code Style

@@ -27,6 +27,21 @@ Guidelines for AI coding agents working on the zpp (Zig Pixel Processing) codeba
 │   ├── zip.zig         # Zip/Unzip for multiple sources
 │   ├── group.zig       # Group/Ungroup for Bayer patterns
 │   └── stats.zig       # Statistics accumulation (Stats, StatsWithCoords)
+├── tests/
+│   ├── root.zig              # Test entry point - imports all test modules
+│   ├── test_helpers.zig      # Shared test utilities (fillRamp, vectorCast, etc.)
+│   ├── region_test.zig       # Region and Margin tests
+│   ├── sources_test.zig      # Input/Output source tests
+│   ├── loop_test.zig         # Loop processing tests
+│   ├── generate_test.zig     # Generate processing tests
+│   ├── math_test.zig         # SIMD math function tests
+│   ├── interpolation_test.zig # Interpolation tests
+│   ├── padding_test.zig      # Padding policy tests
+│   ├── cache_test.zig        # Row caching tests
+│   ├── zip_test.zig          # Zip/Unzip tests
+│   ├── group_test.zig        # Group/Ungroup tests
+│   ├── stats_test.zig        # Statistics tests
+│   └── integration_test.zig  # Cross-module integration tests
 ├── examples/
 │   ├── checkerboard.zig      # Pattern generation example
 │   ├── simplex_noise.zig     # Procedural noise example
@@ -50,9 +65,10 @@ Guidelines for AI coding agents working on the zpp (Zig Pixel Processing) codeba
 
 ## Running Tests
 
+Tests are in the `tests/` directory, separate from the library source.
+
 ```bash
-zig build test              # Run all tests
-zig test src/root.zig       # Run tests for a single file directly
+zig build test              # Run all tests (via tests/root.zig)
 zig build test --summary all  # Run with verbose output
 ```
 
@@ -143,7 +159,7 @@ defer file.close();
 ```
 
 ### Testing
-Place tests in the same file, use descriptive names:
+Tests live in the `tests/` directory, one file per module (e.g., `tests/region_test.zig` for `src/region.zig`). Shared utilities are in `tests/test_helpers.zig`. Use descriptive names:
 ```zig
 test "region inflation preserves center" {
     const region = Region{ .x = 10, .y = 10, .width = 20, .height = 20 };
@@ -161,15 +177,15 @@ const region = zpp.Region{ .x = 0, .y = 0, .width = 800, .height = 600 };
 // Input/Output sources
 const source = zpp.In(f32, &input_data, stride, region);
 const destination = zpp.Out(f32, &output_data, stride, region);
-const rgb_dest = zpp.RgbOut(vec_len, rgb_data, width, region);
+const rgb_dest = zpp.InterleavedOut(u8, 3, rgb_data, width, region);
 
 // Generator (creates from coordinates)
-const generator = zpp.Generate(VecF32, .{}, region, context, processFunc);
-zpp.Process(u8, generator, destination);
+const generator = zpp.Generate(VecF32, context, processFunc);
+zpp.Process(generator, destination);
 
 // Loop (transforms input)
 const result = zpp.Loop(VecF32, .{}, source, context, processFunc);
-zpp.Process(f32, result, destination);
+zpp.Process(result, destination);
 
 // With margins for convolution
 const result = zpp.Loop(VecF32, .{ .margin = zpp.marginI(1) }, source, ctx, kernel);

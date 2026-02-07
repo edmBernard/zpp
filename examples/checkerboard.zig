@@ -13,14 +13,14 @@ const zpp = @import("zpp");
 // MARK: SIMD Vector Configuration
 // ============================================================================
 
-pub const vec_len = zpp.suggested_vec_len;
-pub const VecF32 = @Vector(vec_len, f32);
-pub const VecI32 = @Vector(vec_len, i32);
-pub const VecU8 = @Vector(vec_len, u8);
+const u8v = zpp.u8v;
+const vec_len = @typeInfo(u8v).vector.len;
+const i32v = zpp.VectorLike(u8v, i32);
+const f32v = zpp.VectorLike(u8v, f32);
 
 /// Convenience alias for zpp.splat with VecF32
-inline fn splat(scalar: f32) VecF32 {
-    return zpp.splat(VecF32, scalar);
+inline fn splat(scalar: f32) f32v {
+    return zpp.splat(f32v, scalar);
 }
 
 // ============================================================================
@@ -28,23 +28,22 @@ inline fn splat(scalar: f32) VecF32 {
 // ============================================================================
 
 /// Kernel context for checkerboard generation
-pub const CheckerboardContext = struct {
+const CheckerboardContext = struct {
     /// Size of each checker square in pixels
-    square_size: VecF32,
+    square_size: f32v,
 };
 
 /// Checkerboard generator kernel for zpp.Generate.
 /// Returns RGB values as u8 (black or white based on checker pattern).
-pub fn checkerboardProcess(ctx: CheckerboardContext, x: VecF32, y: VecF32) [3]VecU8 {
+fn checkerboardProcess(ctx: CheckerboardContext, x: f32v, y: f32v) [3]u8v {
     // Compute which square we're in
-    const col: VecI32 = @intFromFloat(x / ctx.square_size);
-    const row: VecI32 = @intFromFloat(y / ctx.square_size);
+    const col: i32v = @intFromFloat(x / ctx.square_size);
+    const row: i32v = @intFromFloat(y / ctx.square_size);
 
     // XOR the column and row parity to get checkerboard pattern
-    const parity = (col ^ row) & @as(VecI32, @splat(1));
-
+    const parity = (col ^ row) & @as(i32v, @splat(1));
     // Convert to u8: 0 -> black (0), 1 -> white (255)
-    const value: VecU8 = @intCast(parity * @as(VecI32, @splat(255)));
+    const value: u8v = @intCast(parity * @as(i32v, @splat(255)));
 
     // Output as grayscale RGB
     return .{ value, value, value };
@@ -55,7 +54,7 @@ pub fn checkerboardProcess(ctx: CheckerboardContext, x: VecF32, y: VecF32) [3]Ve
 // ============================================================================
 
 /// Generate a checkerboard image using zpp primitives.
-pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32, square_size: f32) ![]u8 {
+fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32, square_size: f32) ![]u8 {
     const size = width * height * 3;
     const data = try allocator.alloc(u8, size);
     @memset(data, 0);
@@ -72,7 +71,7 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32, squa
     };
 
     const destination = zpp.InterleavedOut(u8, 3, data, width, region);
-    const generator = zpp.Generate(VecF32, region, context, checkerboardProcess);
+    const generator = zpp.Generate(f32v, context, checkerboardProcess);
     zpp.Process(generator, destination);
 
     return data;

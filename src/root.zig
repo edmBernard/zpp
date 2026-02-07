@@ -29,6 +29,7 @@ const loop = @import("loop.zig");
 /// Default vector length - uses platform optimal size based on u8 processing
 pub const suggested_vec_len = std.simd.suggestVectorLength(u8) orelse 1;
 pub const f32v = @Vector(std.simd.suggestVectorLength(f32) orelse 1, f32);
+pub const i32v = @Vector(std.simd.suggestVectorLength(u16) orelse 1, i32);
 pub const u16v = @Vector(std.simd.suggestVectorLength(u16) orelse 1, u16);
 pub const u8v = @Vector(std.simd.suggestVectorLength(u8) orelse 1, u8);
 
@@ -74,13 +75,12 @@ pub const InterpLoop = interpolation.InterpLoop;
 pub const LoopOptions = loop.LoopOptions;
 pub const DefaultLoopOptions = loop.DefaultLoopOptions;
 
-// Cache module
-pub const RowCache = cache.RowCache;
-pub const CachedLoop = cache.CachedLoop;
 // Loop module (core processing)
 pub const Loop = loop.Loop;
 pub const Generate = loop.Generate;
 pub const Process = loop.Process;
+// Cache module
+pub const CachedLoop = cache.CachedLoop;
 
 // ============================================================================
 // MARK: Math Functions

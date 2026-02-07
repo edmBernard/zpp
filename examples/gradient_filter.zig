@@ -23,31 +23,26 @@ const zpp = @import("zpp");
 // MARK: SIMD Vector Configuration - Use 4-element vectors for chained operations
 // ============================================================================
 
-/// Vector type for processing - matches library's internal vector size
-pub const VecF32 = @Vector(zpp.suggested_vec_len, f32);
-
-/// Convenience alias for zpp.splat with VecF32
-inline fn splat(scalar: f32) VecF32 {
-    return zpp.splat(VecF32, scalar);
-}
+const f32v = zpp.f32v;
+const vec_len = @typeInfo(f32v).vector.len;
 
 // ============================================================================
 // MARK: Linear Algebra Types
 // ============================================================================
 
 pub const Vec2 = struct {
-    x: VecF32,
-    y: VecF32,
+    x: f32v,
+    y: f32v,
 
     pub inline fn add(a: Vec2, b: Vec2) Vec2 {
         return .{ .x = a.x + b.x, .y = a.y + b.y };
     }
 
-    pub inline fn mul1(a: Vec2, b: VecF32) Vec2 {
+    pub inline fn mul1(a: Vec2, b: f32v) Vec2 {
         return .{ .x = a.x * b, .y = a.y * b };
     }
 
-    pub inline fn dot(p: Vec2, q: Vec2) VecF32 {
+    pub inline fn dot(p: Vec2, q: Vec2) f32v {
         return p.x * q.x + p.y * q.y;
     }
 };
@@ -57,15 +52,15 @@ pub const Vec2 = struct {
 // ============================================================================
 
 /// Return the fractional part of a floating point number
-pub inline fn fract(x: VecF32) VecF32 {
+pub inline fn fract(x: f32v) f32v {
     return x - @floor(x);
 }
 
 /// A periodic triangle function - faster approximation useful in hash functions
-inline fn triangle_func(in: VecF32) VecF32 {
-    const z = in * splat(0.25);
-    const f = splat(2.0) * @abs(z - @floor(z) - splat(0.5));
-    return splat(2.0) * f - splat(1.0);
+inline fn triangle_func(in: f32v) f32v {
+    const z = in * zpp.splat(f32v, 0.25);
+    const f = zpp.splat(f32v, 2.0) * @abs(z - @floor(z) - zpp.splat(f32v, 0.5));
+    return zpp.splat(f32v, 2.0) * f - zpp.splat(f32v, 1.0);
 }
 
 // ============================================================================
@@ -77,25 +72,25 @@ const K2: f32 = 0.211324865; // (3-sqrt(3))/6
 
 inline fn hash(p: Vec2) Vec2 {
     const temp = Vec2{
-        .x = Vec2.dot(p, .{ .x = splat(127.1), .y = splat(311.7) }),
-        .y = Vec2.dot(p, .{ .x = splat(269.5), .y = splat(183.3) }),
+        .x = Vec2.dot(p, .{ .x = zpp.splat(f32v, 127.1), .y = zpp.splat(f32v, 311.7) }),
+        .y = Vec2.dot(p, .{ .x = zpp.splat(f32v, 269.5), .y = zpp.splat(f32v, 183.3) }),
     };
     return .{
-        .x = splat(-1.0) + splat(2.0) * fract(triangle_func(temp.x) * splat(43758.5453123)),
-        .y = splat(-1.0) + splat(2.0) * fract(triangle_func(temp.y) * splat(43758.5453123)),
+        .x = zpp.splat(f32v, -1.0) + zpp.splat(f32v, 2.0) * fract(triangle_func(temp.x) * zpp.splat(f32v, 43758.5453123)),
+        .y = zpp.splat(f32v, -1.0) + zpp.splat(f32v, 2.0) * fract(triangle_func(temp.y) * zpp.splat(f32v, 43758.5453123)),
     };
 }
 
 inline fn toSimplexCell(p: Vec2) Vec2 {
-    const k1 = splat(K1);
+    const k1 = zpp.splat(f32v, K1);
     return .{
         .x = @floor(p.x + (p.x + p.y) * k1),
         .y = @floor(p.y + (p.x + p.y) * k1),
     };
 }
 
-pub fn noise(p: Vec2) VecF32 {
-    const k2 = splat(K2);
+pub fn noise(p: Vec2) f32v {
+    const k2 = zpp.splat(f32v, K2);
     const i = toSimplexCell(p);
 
     const a: Vec2 = .{
@@ -103,24 +98,22 @@ pub fn noise(p: Vec2) VecF32 {
         .y = p.y - i.y + (i.x + i.y) * k2,
     };
 
-    const m: VecF32 = @select(f32, a.x < a.y, splat(0), splat(1));
-    const o: Vec2 = .{ .x = m, .y = splat(1.0) - m };
-
+    const m: f32v = @select(f32, a.x < a.y, zpp.splat(f32v, 0), zpp.splat(f32v, 1));
+    const o: Vec2 = .{ .x = m, .y = zpp.splat(f32v, 1) - m };
     const b: Vec2 = .{ .x = a.x - o.x + k2, .y = a.y - o.y + k2 };
     const c: Vec2 = .{
-        .x = a.x - splat(1.0) + splat(2.0) * k2,
-        .y = a.y - splat(1.0) + splat(2.0) * k2,
+        .x = a.x - zpp.splat(f32v, 1) + zpp.splat(f32v, 2) * k2,
+        .y = a.y - zpp.splat(f32v, 1) + zpp.splat(f32v, 2) * k2,
     };
 
-    const h0 = @max(splat(0.5) - Vec2.dot(a, a), splat(0));
-    const h1 = @max(splat(0.5) - Vec2.dot(b, b), splat(0));
-    const h2 = @max(splat(0.5) - Vec2.dot(c, c), splat(0));
-
+    const h0 = @max(zpp.splat(f32v, 0.5) - Vec2.dot(a, a), zpp.splat(f32v, 0));
+    const h1 = @max(zpp.splat(f32v, 0.5) - Vec2.dot(b, b), zpp.splat(f32v, 0));
+    const h2 = @max(zpp.splat(f32v, 0.5) - Vec2.dot(c, c), zpp.splat(f32v, 0));
     const n0 = h0 * h0 * h0 * h0 * Vec2.dot(a, hash(.{ .x = i.x, .y = i.y }));
     const n1 = h1 * h1 * h1 * h1 * Vec2.dot(b, hash(.{ .x = i.x + o.x, .y = i.y + o.y }));
-    const n2 = h2 * h2 * h2 * h2 * Vec2.dot(c, hash(.{ .x = i.x + splat(1.0), .y = i.y + splat(1.0) }));
+    const n2 = h2 * h2 * h2 * h2 * Vec2.dot(c, hash(.{ .x = i.x + zpp.splat(f32v, 1), .y = i.y + zpp.splat(f32v, 1) }));
 
-    return (n0 + n1 + n2) * splat(70);
+    return (n0 + n1 + n2) * zpp.splat(f32v, 70);
 }
 
 // ============================================================================
@@ -129,16 +122,16 @@ pub fn noise(p: Vec2) VecF32 {
 
 /// Context for noise generation
 pub const NoiseContext = struct {
-    scale: VecF32,
+    scale: f32v,
 };
 
 /// Generate grayscale simplex noise (single channel for processing)
-pub fn noiseKernel(ctx: NoiseContext, x: VecF32, y: VecF32) VecF32 {
+pub fn noiseKernel(ctx: NoiseContext, x: f32v, y: f32v) f32v {
     const xs = x / ctx.scale;
     const ys = y / ctx.scale;
     const n = noise(.{ .x = xs, .y = ys });
     // Map from [-1, 1] to [0, 1]
-    return n * splat(0.5) + splat(0.5);
+    return n * zpp.splat(f32v, 0.5) + zpp.splat(f32v, 0.5);
 }
 
 // ============================================================================
@@ -148,12 +141,12 @@ pub fn noiseKernel(ctx: NoiseContext, x: VecF32, y: VecF32) VecF32 {
 /// Context for resize operation
 pub const ResizeContext = struct {
     /// Scale factor (0.5 = double size, as we sample at half coordinates)
-    scale: VecF32,
+    scale: f32v,
 };
 
 /// Resize kernel using interpolated sampling.
 /// The kernel receives output coordinates and samples the input at scaled coordinates.
-pub fn resizeKernel(ctx: ResizeContext, interp: anytype, x: VecF32, y: VecF32) VecF32 {
+pub fn resizeKernel(ctx: ResizeContext, interp: anytype, x: f32v, y: f32v) f32v {
     // For 2x upscale, we sample input at x/2, y/2
     return interp.sample(x * ctx.scale, y * ctx.scale);
 }
@@ -172,7 +165,7 @@ pub const GradientContext = struct {};
 /// -1  0  1            -1 -2 -1
 /// -2  0  2             0  0  0
 /// -1  0  1             1  2  1
-pub fn gradientKernel(ctx: GradientContext, in: anytype) VecF32 {
+pub fn gradientKernel(ctx: GradientContext, in: anytype) f32v {
     _ = ctx;
 
     // Sample 3x3 neighborhood
@@ -185,9 +178,9 @@ pub fn gradientKernel(ctx: GradientContext, in: anytype) VecF32 {
     const bc = in.getAt(0, 1); // bottom-center
     const br = in.getAt(1, 1); // bottom-right
 
-    const two: VecF32 = splat(2.0);
-    const quarter: VecF32 = splat(0.25);
-    const one: VecF32 = splat(1.0);
+    const two: f32v = zpp.splat(f32v, 2.0);
+    const quarter: f32v = zpp.splat(f32v, 0.25);
+    const one: f32v = zpp.splat(f32v, 1.0);
 
     // Sobel X gradient: horizontal edges
     const gx = (tr - tl) + two * (mr - ml) + (br - bl);
@@ -214,13 +207,13 @@ pub const GammaContext = struct {
 };
 
 /// Apply gamma correction: output = input ^ gamma
-pub fn gammaKernel(ctx: GammaContext, in: anytype) VecF32 {
+pub fn gammaKernel(ctx: GammaContext, in: anytype) f32v {
     const value = in.get();
     // Clamp to valid range for pow
-    const small: VecF32 = splat(0.0001);
+    const small: f32v = zpp.splat(f32v, 0.0001);
     const clamped = @max(value, small);
     // Apply gamma: v^gamma using exp(gamma * log(v))
-    const gamma_vec: VecF32 = splat(ctx.gamma);
+    const gamma_vec: f32v = zpp.splat(f32v, ctx.gamma);
     return @exp(gamma_vec * @log(clamped));
 }
 
@@ -247,22 +240,14 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
         .height = height,
     };
 
-    // Source region (half size, will be upscaled 2x)
-    const source_region = zpp.Region{
-        .x = 0,
-        .y = 0,
-        .width = width / 2,
-        .height = height / 2,
-    };
-
-    // Stage 1: Generate simplex noise at half resolution
-    const noise_ctx = NoiseContext{ .scale = splat(50.0) };
-    const noise_source = zpp.Generate(VecF32, source_region, noise_ctx, noiseKernel);
+    // Stage 1: Generate simplex noise (resolution determined by output region)
+    const noise_ctx = NoiseContext{ .scale = zpp.splat(f32v, 50.0) };
+    const noise_source = zpp.Generate(f32v, noise_ctx, noiseKernel);
 
     // Stage 2: Resize 2x with bilinear interpolation
-    const resize_ctx = ResizeContext{ .scale = splat(0.5) };
+    const resize_ctx = ResizeContext{ .scale = zpp.splat(f32v, 0.5) };
     const resized = zpp.InterpLoop(
-        VecF32,
+        f32v,
         .Linear, // Bilinear interpolation
         noise_source,
         output_region,
@@ -273,7 +258,7 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
     // Stage 3: Apply gradient filter (edge detection)
     const gradient_ctx = GradientContext{};
     const edges = zpp.Loop(
-        VecF32,
+        f32v,
         .{ .margin = zpp.marginI(1) }, // Need 1-pixel margin for 3x3 kernel
         resized,
         gradient_ctx,
@@ -282,8 +267,7 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
 
     // Stage 4: Apply gamma correction to enhance contrast
     const gamma_ctx = GammaContext{ .gamma = 0.6 }; // Brighten the edges
-    const corrected = zpp.Loop(VecF32, .{}, edges, gamma_ctx, gammaKernel);
-
+    const corrected = zpp.Loop(f32v, .{}, edges, gamma_ctx, gammaKernel);
     // Process the expression tree and write to grayscale buffer
     const gray_dest = zpp.Out(f32, gray_data, width, output_region);
     zpp.Process(corrected, gray_dest);
@@ -354,10 +338,10 @@ pub fn main() !void {
 // ============================================================================
 
 test "noise kernel produces valid values" {
-    const ctx = NoiseContext{ .scale = splat(50.0) };
-    const result = noiseKernel(ctx, splat(25.0), splat(25.0));
+    const ctx = NoiseContext{ .scale = zpp.splat(f32v, 50.0) };
+    const result = noiseKernel(ctx, zpp.splat(f32v, 25.0), zpp.splat(f32v, 25.0));
 
-    for (0..zpp.suggested_vec_len) |i| {
+    for (0..vec_len) |i| {
         // Output should be in [0, 1] range after mapping
         try std.testing.expect(result[i] >= 0.0 and result[i] <= 1.0);
     }
@@ -372,7 +356,7 @@ test "gamma kernel with gamma=1.0 is identity" {
     const dest = zpp.Out(f32, &output, 4, region);
 
     const ctx = GammaContext{ .gamma = 1.0 };
-    const result = zpp.Loop(VecF32, .{}, source, ctx, gammaKernel);
+    const result = zpp.Loop(f32v, .{}, source, ctx, gammaKernel);
     zpp.Process(result, dest);
 
     // With gamma=1.0, output should equal input
@@ -395,7 +379,7 @@ test "gradient kernel detects edges" {
     const dest = zpp.Out(f32, &output, 4, region);
 
     const ctx = GradientContext{};
-    const result = zpp.Loop(VecF32, .{ .margin = zpp.marginI(1) }, source, ctx, gradientKernel);
+    const result = zpp.Loop(f32v, .{ .margin = zpp.marginI(1) }, source, ctx, gradientKernel);
     zpp.Process(result, dest);
 
     // Center column (x=1, x=2) should have high gradient values
@@ -416,14 +400,14 @@ test "expression tree chaining works" {
     // Chain: identity -> gamma
     const identity_kernel = struct {
         const Context = struct {};
-        pub fn process(ctx: Context, in: anytype) VecF32 {
+        pub fn process(ctx: Context, in: anytype) f32v {
             _ = ctx;
             return in.get();
         }
     };
 
-    const step1 = zpp.Loop(VecF32, .{}, source, identity_kernel.Context{}, identity_kernel.process);
-    const step2 = zpp.Loop(VecF32, .{}, step1, GammaContext{ .gamma = 2.0 }, gammaKernel);
+    const step1 = zpp.Loop(f32v, .{}, source, identity_kernel.Context{}, identity_kernel.process);
+    const step2 = zpp.Loop(f32v, .{}, step1, GammaContext{ .gamma = 2.0 }, gammaKernel);
     zpp.Process(step2, dest);
 
     // Verify output is input^2
@@ -445,8 +429,8 @@ test "resize with InterpLoop" {
     const source = zpp.In(f32, &source_data, 2, source_region);
     const dest = zpp.Out(f32, &output_data, 4, output_region);
 
-    const resize_ctx = ResizeContext{ .scale = splat(0.5) };
-    const resized = zpp.InterpLoop(VecF32, .Linear, source, output_region, resize_ctx, resizeKernel);
+    const resize_ctx = ResizeContext{ .scale = zpp.splat(f32v, 0.5) };
+    const resized = zpp.InterpLoop(f32v, .Linear, source, output_region, resize_ctx, resizeKernel);
     zpp.Process(resized, dest);
 
     // Corner values should be preserved (approximately)
