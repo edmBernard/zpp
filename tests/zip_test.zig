@@ -41,8 +41,8 @@ test "Zip: two sources add correctly" {
     try std.testing.expectEqual(expected_data, output_data);
 }
 
-// MARK: Zip: fill two destination
-test "Zip: fill two destination" {
+// MARK: Zip: fill two destination: kernel output is a struct
+test "Zip: fill two destination: kernel output is a struct" {
     const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
 
     var input_data: [8]f32 = undefined;
@@ -59,6 +59,46 @@ test "Zip: fill two destination" {
 
     const kernel = struct {
         fn process(ctx: anytype, in: anytype) struct { f32x4, f32x4 } {
+            _ = ctx;
+            const value = in.get();
+            return .{ value, value * th.splatWithCast(f32x4, 2) };
+        }
+    };
+
+    const result = zpp.Loop(f32x4, .{}, source, .{}, kernel.process);
+    zpp.Process(result, zipped);
+
+    // output = input_a + input_b = [1+10, 2+20, 3+30, ..., 8+80]
+    const expected_data_a = [_]f32{
+        1, 2, 3, 4,
+        5, 6, 7, 8,
+    };
+    try std.testing.expectEqual(expected_data_a, output_data_a);
+    const expected_data_b = [_]f32{
+        2,  4,  6,  8,
+        10, 12, 14, 16,
+    };
+    try std.testing.expectEqual(expected_data_b, output_data_b);
+}
+
+// MARK: Zip: fill two destination: kernel output is an array
+test "Zip: fill two destination: kernel output is an array" {
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
+
+    var input_data: [8]f32 = undefined;
+    th.fillRamp(f32, &input_data, 1, 1);
+
+    var output_data_a = [_]f32{0} ** 8;
+    var output_data_b = [_]f32{0} ** 8;
+
+    const source = zpp.In(f32, &input_data, region.width, region);
+    const destination_a = zpp.Out(f32, &output_data_a, region.width, region);
+    const destination_b = zpp.Out(f32, &output_data_b, region.width, region);
+
+    const zipped = zpp.ZipOut(.{ destination_a, destination_b });
+
+    const kernel = struct {
+        fn process(ctx: anytype, in: anytype) [2]f32x4 {
             _ = ctx;
             const value = in.get();
             return .{ value, value * th.splatWithCast(f32x4, 2) };
@@ -124,8 +164,8 @@ test "Zip: Can chained several zip kernels together" {
     };
     try std.testing.expectEqual(expected_data_a, output_data_a);
     const expected_data_b = [_]f32{
-        110,  220,  330,  440,
-        550,  660,  770,  880,
+        110, 220, 330, 440,
+        550, 660, 770, 880,
     };
     try std.testing.expectEqual(expected_data_b, output_data_b);
 }

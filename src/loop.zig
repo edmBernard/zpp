@@ -538,6 +538,13 @@ fn firstLane(result: anytype) FirstLaneType(@TypeOf(result)) {
     const info = @typeInfo(T);
     switch (info) {
         .vector => return result[0],
+        .array => |a| {
+            var out: [a.len]FirstLaneType(a.child) = undefined;
+            inline for (0..a.len) |i| {
+                out[i] = firstLane(result[i]);
+            }
+            return out;
+        },
         .@"struct" => |s| {
             var out: FirstLaneType(T) = undefined;
             inline for (0..s.fields.len) |i| {
@@ -545,7 +552,7 @@ fn firstLane(result: anytype) FirstLaneType(@TypeOf(result)) {
             }
             return out;
         },
-        else => @compileError("Unsupported type for firstLane: expected vector or struct tuple"),
+        else => @compileError("Unsupported type for firstLane: expected vector, array, or struct tuple"),
     }
 }
 
@@ -553,6 +560,7 @@ fn FirstLaneType(comptime T: type) type {
     const info = @typeInfo(T);
     return switch (info) {
         .vector => |v| v.child,
+        .array => |a| [a.len]FirstLaneType(a.child),
         .@"struct" => |s| [s.fields.len]FirstLaneType(s.fields[0].type),
         else => @compileError("Unsupported type for FirstLaneType: " ++ @typeName(T)),
     };
