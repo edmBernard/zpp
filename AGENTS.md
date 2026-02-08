@@ -19,6 +19,7 @@ Guidelines for AI coding agents working on the zpp (Zig Pixel Processing) codeba
 │   ├── root.zig        # Library entry point - re-exports all public API
 │   ├── region.zig      # Region and Margin types
 │   ├── sources.zig     # Input/Output buffer wrappers (In, Out, InterleavedOut)
+│   ├── translate.zig   # Zero-cost integer translation (Translate)
 │   ├── loop.zig        # Core processing primitives (Loop, Generate, Process)
 │   ├── math.zig        # SIMD math functions (sin, cos, exp, pow, etc.)
 │   ├── interpolation.zig # Interpolation methods (Nearest, Linear, Cubic)
@@ -32,6 +33,7 @@ Guidelines for AI coding agents working on the zpp (Zig Pixel Processing) codeba
 │   ├── test_helpers.zig      # Shared test utilities (fillRamp, vectorCast, etc.)
 │   ├── region_test.zig       # Region and Margin tests
 │   ├── sources_test.zig      # Input/Output source tests
+│   ├── translate_test.zig    # Translation tests
 │   ├── loop_test.zig         # Loop processing tests
 │   ├── generate_test.zig     # Generate processing tests
 │   ├── math_test.zig         # SIMD math function tests
@@ -91,18 +93,14 @@ const zpp = @import("zpp");
 
 ### Naming Conventions
 - **Variables/functions:** `snake_case` (`vec_len`, `generate_image`)
-- **Types/structs:** `PascalCase` (`Region`, `Margin`, `VecF32`)
+- **Types/structs:** `PascalCase` (`Region`, `Margin`)
 - **Constants:** `snake_case` or `UPPER_SNAKE_CASE` for special values
 
 ### SIMD Vector Types
 ```zig
 pub const vec_len = zpp.suggested_vec_len;
-pub const VecF32 = @Vector(vec_len, f32);
-pub const VecI32 = @Vector(vec_len, i32);
-
-pub inline fn splat(scalar: f32) VecF32 {
-    return @splat(scalar);
-}
+pub const f32v = @Vector(vec_len, f32);
+pub const i32v = @Vector(vec_len, i32);
 ```
 
 ### Struct Definitions
@@ -123,13 +121,15 @@ pub const Region = struct {
 ### Kernel Pattern
 Kernels have a context struct and a process function:
 ```zig
-pub const KernelContext = struct {
-    scale: VecF32,
-};
+const Kernel = struct {
+    const Context = struct {
+        scale: f32v,
+    }
 
-pub fn kernelProcess(ctx: KernelContext, in: anytype) VecF32 {
-    return in.get() * ctx.scale;
-}
+    pub fn process(ctx: Context, in: anytype) f32v {
+        return in.get() * ctx.scale;
+    }
+};
 ```
 
 ### Function Signatures
@@ -155,7 +155,7 @@ defer file.close();
 ```zig
 //! Module-level documentation (top of file)
 /// Function/type documentation
-// MARK: Section Headers
+// MARK: Section Headers for IDE support
 ```
 
 ### Testing
@@ -180,23 +180,27 @@ const destination = zpp.Out(f32, &output_data, stride, region);
 const rgb_dest = zpp.InterleavedOut(u8, 3, rgb_data, width, region);
 
 // Generator (creates from coordinates)
-const generator = zpp.Generate(VecF32, context, processFunc);
+const generator = zpp.Generate(f32v, context, processFunc);
 zpp.Process(generator, destination);
 
 // Loop (transforms input)
-const result = zpp.Loop(VecF32, .{}, source, context, processFunc);
+const result = zpp.Loop(f32v, .{}, source, context, processFunc);
 zpp.Process(result, destination);
 
 // With margins for convolution
-const result = zpp.Loop(VecF32, .{ .margin = zpp.marginI(1) }, source, ctx, kernel);
+const result = zpp.Loop(f32v, .{ .margin = zpp.marginI(1) }, source, ctx, kernel);
+
+// Translation (zero-cost integer pixel shift)
+const shifted = zpp.Translate(source, 10, 5);  // shift right 10, down 5
+zpp.Process(shifted, destination);
 ```
 
 ### Expression Trees (lazy chaining)
 ```zig
-const step1 = zpp.Loop(VecF32, .{}, source, ctx1, kernel1);
-const step2 = zpp.InterpLoop(VecF32, .Linear, step1, output_region, ctx2, resize_kernel);
-const step3 = zpp.Loop(VecF32, .{ .margin = zpp.marginI(1) }, step2, ctx3, gradient_kernel);
-zpp.Process(f32, step3, destination);
+const step1 = zpp.Loop(f32v, .{}, source, ctx1, kernel1);
+const step2 = zpp.InterpLoop(f32v, .Linear, step1, output_region, ctx2, resize_kernel);
+const step3 = zpp.Loop(f32v, .{ .margin = zpp.marginI(1) }, step2, ctx3, gradient_kernel);
+zpp.Process(step3, destination);
 ```
 
 ## Common Pitfalls
