@@ -54,7 +54,7 @@ pub fn InputSource(comptime T: type, comptime PaddingPolicy: type) type {
                 return self.readVecUnchecked(VecT, x, y);
             }
 
-            // TODO: Implemente vectorized padding
+            // TODO: Implement vectorized padding
             // Slow path: apply padding policy element-by-element
             var result: VecT = undefined;
             inline for (0..vec_len) |i| {

@@ -27,11 +27,8 @@ pub fn LoopOptions(comptime CoordType: ?type) type {
     };
 }
 
-/// Default loop options type
-pub const DefaultLoopOptions = struct {
-    need_coordinates: ?type = null,
-    margin: Margin = .{},
-};
+/// Default loop options (no coordinates, zero margin).
+pub const DefaultLoopOptions = LoopOptions(null);
 
 // ============================================================================
 // MARK: Helper Functions
@@ -127,14 +124,14 @@ pub fn GeneratorResult(
         const iota = std.simd.iota(@typeInfo(CoordT).vector.child, vec_len);
 
         pub inline fn evalAt(self: Self, x: i32, y: i32) OutputType {
-            const x_vec: CoordT = iota + CastScalarCoordToVector(CoordT, x);
-            const y_vec: CoordT = CastScalarCoordToVector(CoordT, y);
+            const x_vec: CoordT = iota + castScalarCoordToVector(CoordT, x);
+            const y_vec: CoordT = castScalarCoordToVector(CoordT, y);
             return process_fn(self.context, x_vec, y_vec);
         }
     };
 }
 
-inline fn CastScalarCoordToVector(comptime CoordT: type, value: i32) CoordT {
+inline fn castScalarCoordToVector(comptime CoordT: type, value: i32) CoordT {
     switch (@typeInfo(CoordT).vector.child) {
         f32 => {
             return @as(CoordT, @splat(@floatFromInt(value)));
@@ -142,7 +139,7 @@ inline fn CastScalarCoordToVector(comptime CoordT: type, value: i32) CoordT {
         u16, u8 => {
             return @as(CoordT, @splat(@intCast(value)));
         },
-        else => @compileError("CastScalarCoordToVector only supports f32, u16, u8 scalars"),
+        else => @compileError("castScalarCoordToVector only supports f32, u16, u8 scalars"),
     }
 }
 
@@ -288,8 +285,8 @@ pub fn LoopResult(
                 const CoordT = opts.need_coordinates.?;
                 const CoordElemT = @typeInfo(CoordT).vector.child;
                 const iota = std.simd.iota(CoordElemT, vec_len);
-                const x_coords: CoordT = iota + CastScalarCoordToVector(CoordT, x);
-                const y_coords: CoordT = CastScalarCoordToVector(CoordT, y);
+                const x_coords: CoordT = iota + castScalarCoordToVector(CoordT, x);
+                const y_coords: CoordT = castScalarCoordToVector(CoordT, y);
                 return process_fn(self.context, accessor, x_coords, y_coords);
             } else {
                 return process_fn(self.context, accessor);
@@ -313,8 +310,8 @@ pub fn LoopResult(
                 const CoordT = opts.need_coordinates.?;
                 const CoordElemT = @typeInfo(CoordT).vector.child;
                 const iota = std.simd.iota(CoordElemT, vec_len);
-                const x_coords: CoordT = iota + CastScalarCoordToVector(CoordT, x);
-                const y_coords: CoordT = CastScalarCoordToVector(CoordT, y);
+                const x_coords: CoordT = iota + castScalarCoordToVector(CoordT, x);
+                const y_coords: CoordT = castScalarCoordToVector(CoordT, y);
                 return process_fn(self.context, accessor, x_coords, y_coords);
             } else {
                 return process_fn(self.context, accessor);
@@ -390,14 +387,7 @@ fn getCompatibleVectorLen(comptime SourceType: type, comptime DestType: type) co
 }
 
 /// Get vector length from a source type.
-/// Returns the source's vector_length if it has one, otherwise returns 4
-/// (a conservative default for direct Process calls).
-fn getSourceVecLen(comptime SourceType: type) ?comptime_int {
-    if (@hasDecl(SourceType, "vector_length")) {
-        return SourceType.vector_length;
-    }
-    return null;
-}
+const getSourceVecLen = zip_mod.getSourceVecLen;
 
 /// Execute the processing pipeline and write results to output.
 /// Supports both single-channel and multi-channel sources.

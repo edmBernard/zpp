@@ -7,19 +7,9 @@ const zip_mod = @import("zip.zig");
 const Region = region_mod.Region;
 const VecTuple = zip_mod.VecTuple;
 
-// ============================================================================
-// MARK: Helper: Get Vector Length from Source
-// ============================================================================
-
-/// Get vector length from a source type.
-/// Returns the source's vector_length if it has one, otherwise returns 4
-/// (a conservative default for direct Process calls).
+/// Get vector length from a source type, defaulting to 4.
 fn getSourceVecLen(comptime SourceType: type) comptime_int {
-    if (@hasDecl(SourceType, "vector_length")) {
-        return SourceType.vector_length;
-    }
-    // Conservative default for direct Process calls without Loop wrapper
-    return 4;
+    return zip_mod.getSourceVecLen(SourceType) orelse 4;
 }
 
 // ============================================================================
@@ -39,6 +29,8 @@ pub fn GroupSource(comptime NestedSource: type, comptime P: comptime_int, compti
         region: Region,
 
         const Self = @This();
+
+        pub const is_group_source = true;
 
         /// The group dimensions
         pub const group_width = P;
@@ -328,8 +320,7 @@ pub fn GroupAccessor(comptime SrcType: type, comptime VecT: type, comptime P: co
     };
 }
 
-// TODO: add a proper member to determine group source
 /// Helper to detect if a type is a GroupSource
 pub fn isGroupSourceType(comptime T: type) bool {
-    return @hasDecl(T, "group_width") and @hasDecl(T, "group_height") and @hasField(T, "nested");
+    return @hasDecl(T, "is_group_source");
 }

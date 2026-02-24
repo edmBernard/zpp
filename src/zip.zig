@@ -81,15 +81,14 @@ pub fn tupleLen(comptime TupleType: type) comptime_int {
     return @typeInfo(TupleType).@"struct".fields.len;
 }
 
-// TODO: add a proper member to source/dest types ?
 /// Helper to detect if a type is a ZipSource
 pub fn isZipSourceType(comptime T: type) bool {
-    return @hasDecl(T, "count") and @hasField(T, "sources") and @hasField(T, "region") and @hasDecl(T, "Sources");
+    return @hasDecl(T, "is_zip_source");
 }
 
 /// Check if a type is a ZipDest
 pub fn isZipDestType(comptime T: type) bool {
-    return @hasDecl(T, "count") and @hasField(T, "dests") and @hasField(T, "region");
+    return @hasDecl(T, "is_zip_dest");
 }
 
 // ============================================================================
@@ -98,7 +97,7 @@ pub fn isZipDestType(comptime T: type) bool {
 
 /// Get vector length from a source type.
 /// Returns the source's vector_length if it has one, otherwise returns null.
-fn getSourceVecLen(comptime SourceType: type) ?comptime_int {
+pub fn getSourceVecLen(comptime SourceType: type) ?comptime_int {
     if (@hasDecl(SourceType, "vector_length")) {
         return SourceType.vector_length;
     }
@@ -136,6 +135,8 @@ pub fn ZipSource(comptime source_count: comptime_int, comptime SourceTypes: [sou
         region: Region,
 
         const Self = @This();
+
+        pub const is_zip_source = true;
 
         /// Number of sources in this zip
         pub const count = source_count;
@@ -214,6 +215,7 @@ pub fn ZipDest(comptime dest_count: comptime_int, comptime DestTypes: [dest_coun
         region: Region,
 
         const Self = @This();
+        pub const is_zip_dest = true;
         pub const count = dest_count;
 
         pub fn write(self: Self, x: u32, y: u32, values: anytype) void {
