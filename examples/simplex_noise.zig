@@ -52,9 +52,9 @@ pub inline fn fract(x: f32v) f32v {
 
 /// A periodic triangle function - faster approximation useful in hash functions
 inline fn triangle_func(in: f32v) f32v {
-    const z = in * zpp.splat(f32v, 0.25);
-    const f = zpp.splat(f32v, 2.0) * @abs(z - @floor(z) - zpp.splat(f32v, 0.5));
-    return zpp.splat(f32v, 2.0) * f - zpp.splat(f32v, 1.0);
+    const z = in * zpp.math.splat(f32v, 0.25);
+    const f = zpp.math.splat(f32v, 2.0) * @abs(z - @floor(z) - zpp.math.splat(f32v, 0.5));
+    return zpp.math.splat(f32v, 2.0) * f - zpp.math.splat(f32v, 1.0);
 }
 
 // ============================================================================
@@ -69,18 +69,18 @@ const K2: f32 = 0.211324865; // (3-sqrt(3))/6
 /// This is a pure SIMD function - very fast as it's all ALU operations.
 inline fn hash(p: Vec2) Vec2 {
     const temp = Vec2{
-        .x = Vec2.dot(p, .{ .x = zpp.splat(f32v, 127.1), .y = zpp.splat(f32v, 311.7) }),
-        .y = Vec2.dot(p, .{ .x = zpp.splat(f32v, 269.5), .y = zpp.splat(f32v, 183.3) }),
+        .x = Vec2.dot(p, .{ .x = zpp.math.splat(f32v, 127.1), .y = zpp.math.splat(f32v, 311.7) }),
+        .y = Vec2.dot(p, .{ .x = zpp.math.splat(f32v, 269.5), .y = zpp.math.splat(f32v, 183.3) }),
     };
     return .{
-        .x = zpp.splat(f32v, -1.0) + zpp.splat(f32v, 2.0) * fract(triangle_func(temp.x) * zpp.splat(f32v, 43758.5453123)),
-        .y = zpp.splat(f32v, -1.0) + zpp.splat(f32v, 2.0) * fract(triangle_func(temp.y) * zpp.splat(f32v, 43758.5453123)),
+        .x = zpp.math.splat(f32v, -1.0) + zpp.math.splat(f32v, 2.0) * fract(triangle_func(temp.x) * zpp.math.splat(f32v, 43758.5453123)),
+        .y = zpp.math.splat(f32v, -1.0) + zpp.math.splat(f32v, 2.0) * fract(triangle_func(temp.y) * zpp.math.splat(f32v, 43758.5453123)),
     };
 }
 
 /// Compute simplex grid base coordinate from world coordinate (the skewing transform).
 inline fn toSimplexCell(p: Vec2) Vec2 {
-    const k1 = zpp.splat(f32v, K1);
+    const k1 = zpp.math.splat(f32v, K1);
     return .{
         .x = @floor(p.x + (p.x + p.y) * k1),
         .y = @floor(p.y + (p.x + p.y) * k1),
@@ -90,7 +90,7 @@ inline fn toSimplexCell(p: Vec2) Vec2 {
 /// 2D Simplex noise implementation.
 /// Returns values roughly in range [-1, 1].
 pub fn noise(p: Vec2) f32v {
-    const k2 = zpp.splat(f32v, K2);
+    const k2 = zpp.math.splat(f32v, K2);
 
     // Compute simplex cell coordinate
     const i = toSimplexCell(p);
@@ -102,28 +102,28 @@ pub fn noise(p: Vec2) f32v {
     };
 
     // Determine which simplex (lower or upper triangle)
-    const m: f32v = @select(f32, a.x < a.y, zpp.splat(f32v, 0), zpp.splat(f32v, 1));
-    const o: Vec2 = .{ .x = m, .y = zpp.splat(f32v, 1.0) - m };
+    const m: f32v = @select(f32, a.x < a.y, zpp.math.splat(f32v, 0), zpp.math.splat(f32v, 1));
+    const o: Vec2 = .{ .x = m, .y = zpp.math.splat(f32v, 1.0) - m };
 
     // Offsets for other two vertices
     const b: Vec2 = .{ .x = a.x - o.x + k2, .y = a.y - o.y + k2 };
     const c: Vec2 = .{
-        .x = a.x - zpp.splat(f32v, 1.0) + zpp.splat(f32v, 2.0) * k2,
-        .y = a.y - zpp.splat(f32v, 1.0) + zpp.splat(f32v, 2.0) * k2,
+        .x = a.x - zpp.math.splat(f32v, 1.0) + zpp.math.splat(f32v, 2.0) * k2,
+        .y = a.y - zpp.math.splat(f32v, 1.0) + zpp.math.splat(f32v, 2.0) * k2,
     };
 
     // Falloff weights (radial basis functions)
-    const h0 = @max(zpp.splat(f32v, 0.5) - Vec2.dot(a, a), zpp.splat(f32v, 0));
-    const h1 = @max(zpp.splat(f32v, 0.5) - Vec2.dot(b, b), zpp.splat(f32v, 0));
-    const h2 = @max(zpp.splat(f32v, 0.5) - Vec2.dot(c, c), zpp.splat(f32v, 0));
+    const h0 = @max(zpp.math.splat(f32v, 0.5) - Vec2.dot(a, a), zpp.math.splat(f32v, 0));
+    const h1 = @max(zpp.math.splat(f32v, 0.5) - Vec2.dot(b, b), zpp.math.splat(f32v, 0));
+    const h2 = @max(zpp.math.splat(f32v, 0.5) - Vec2.dot(c, c), zpp.math.splat(f32v, 0));
 
     // Compute hash at the three simplex vertices and dot with offset
     const n0 = h0 * h0 * h0 * h0 * Vec2.dot(a, hash(.{ .x = i.x, .y = i.y }));
     const n1 = h1 * h1 * h1 * h1 * Vec2.dot(b, hash(.{ .x = i.x + o.x, .y = i.y + o.y }));
-    const n2 = h2 * h2 * h2 * h2 * Vec2.dot(c, hash(.{ .x = i.x + zpp.splat(f32v, 1.0), .y = i.y + zpp.splat(f32v, 1.0) }));
+    const n2 = h2 * h2 * h2 * h2 * Vec2.dot(c, hash(.{ .x = i.x + zpp.math.splat(f32v, 1.0), .y = i.y + zpp.math.splat(f32v, 1.0) }));
 
     // Scale to roughly [-1, 1]
-    return (n0 + n1 + n2) * zpp.splat(f32v, 70);
+    return (n0 + n1 + n2) * zpp.math.splat(f32v, 70);
 }
 
 // ============================================================================
@@ -150,7 +150,7 @@ pub fn noiseProcess(ctx: NoiseContext, x: f32v, y: f32v) [3]u8v {
     const n = noise(.{ .x = xs, .y = ys });
 
     // Map from [-1, 1] to [0, 255] for grayscale output
-    const gray: u8v = @intFromFloat(@max(zpp.splat(f32v, 0.0), @min(zpp.splat(f32v, 255.0), (n * zpp.splat(f32v, 0.5) + zpp.splat(f32v, 0.5)) * zpp.splat(f32v, 255.0))));
+    const gray: u8v = @intFromFloat(@max(zpp.math.splat(f32v, 0.0), @min(zpp.math.splat(f32v, 255.0), (n * zpp.math.splat(f32v, 0.5) + zpp.math.splat(f32v, 0.5)) * zpp.math.splat(f32v, 255.0))));
 
     // Output as grayscale RGB
     return .{ gray, gray, gray };
@@ -167,9 +167,9 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
     @memset(data, 0);
 
     const context = NoiseContext{
-        .scale = zpp.splat(f32v, 100.0), // Adjust for different noise scales
-        .offset_x = zpp.splat(f32v, 0.0),
-        .offset_y = zpp.splat(f32v, 0.0),
+        .scale = zpp.math.splat(f32v, 100.0), // Adjust for different noise scales
+        .offset_x = zpp.math.splat(f32v, 0.0),
+        .offset_y = zpp.math.splat(f32v, 0.0),
     };
 
     const region = zpp.Region{
@@ -235,7 +235,7 @@ pub fn main() !void {
 // ============================================================================
 
 test "simplex noise produces values in expected range" {
-    const p = Vec2{ .x = zpp.splat(f32v, 0.5), .y = zpp.splat(f32v, 0.5) };
+    const p = Vec2{ .x = zpp.math.splat(f32v, 0.5), .y = zpp.math.splat(f32v, 0.5) };
     const n = noise(p);
     for (0..vec_len) |i| {
         // Noise is scaled by 70, so raw values can exceed [-1, 1] slightly
@@ -244,7 +244,7 @@ test "simplex noise produces values in expected range" {
 }
 
 test "simplex noise is deterministic" {
-    const p = Vec2{ .x = zpp.splat(f32v, 1.23), .y = zpp.splat(f32v, 4.56) };
+    const p = Vec2{ .x = zpp.math.splat(f32v, 1.23), .y = zpp.math.splat(f32v, 4.56) };
     const n1 = noise(p);
     const n2 = noise(p);
 
@@ -256,11 +256,11 @@ test "simplex noise is deterministic" {
 
 test "noise kernel produces valid RGB" {
     const ctx = NoiseContext{
-        .scale = zpp.splat(f32v, 100.0),
-        .offset_x = zpp.splat(f32v, 0.0),
-        .offset_y = zpp.splat(f32v, 0.0),
+        .scale = zpp.math.splat(f32v, 100.0),
+        .offset_x = zpp.math.splat(f32v, 0.0),
+        .offset_y = zpp.math.splat(f32v, 0.0),
     };
-    const rgb = noiseProcess(ctx, zpp.splat(f32v, 50.0), zpp.splat(f32v, 50.0));
+    const rgb = noiseProcess(ctx, zpp.math.splat(f32v, 50.0), zpp.math.splat(f32v, 50.0));
 
     for (0..vec_len) |i| {
         // RGB values are u8, so always in [0, 255] range
@@ -277,8 +277,8 @@ test "zpp.Region integration" {
 }
 
 test "hash function produces consistent values" {
-    const p1 = Vec2{ .x = zpp.splat(f32v, 1.0), .y = zpp.splat(f32v, 2.0) };
-    const p2 = Vec2{ .x = zpp.splat(f32v, 1.0), .y = zpp.splat(f32v, 2.0) };
+    const p1 = Vec2{ .x = zpp.math.splat(f32v, 1.0), .y = zpp.math.splat(f32v, 2.0) };
+    const p2 = Vec2{ .x = zpp.math.splat(f32v, 1.0), .y = zpp.math.splat(f32v, 2.0) };
 
     const h1 = hash(p1);
     const h2 = hash(p2);

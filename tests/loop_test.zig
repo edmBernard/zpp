@@ -33,7 +33,7 @@ test "Loop: produce correct type accessor" {
                 if (VecType != LoopType) {
                     @compileError("Expected coordinate vectors to match LoopType");
                 }
-                return value * zpp.splat(VecType, 10);
+                return value * zpp.math.splat(VecType, 10);
             }
         };
 

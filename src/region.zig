@@ -13,36 +13,34 @@ pub const Margin = struct {
     bottom: u32 = 0,
     right: u32 = 0,
 
-    const Self = @This();
-
     /// Returns true if this is a zero margin (no neighborhood access needed).
-    pub fn isZero(self: Self) bool {
+    pub fn isZero(self: Margin) bool {
         return self.left == 0 and self.right == 0 and self.top == 0 and self.bottom == 0;
     }
 
     /// Returns true if this is a purely vertical margin (left == right == 0).
-    pub fn isVertical(self: Self) bool {
+    pub fn isVertical(self: Margin) bool {
         return self.left == 0 and self.right == 0 and self.top == self.bottom and self.top > 0;
     }
 
     /// Returns true if this is a purely horizontal margin (top == bottom == 0).
-    pub fn isHorizontal(self: Self) bool {
+    pub fn isHorizontal(self: Margin) bool {
         return self.top == 0 and self.bottom == 0 and self.left == self.right and self.left > 0;
     }
 
     /// Returns true if this is an isotropic margin (all sides equal).
-    pub fn isIsotropic(self: Self) bool {
+    pub fn isIsotropic(self: Margin) bool {
         return self.left == self.right and self.top == self.bottom and
             self.left == self.top and self.left > 0;
     }
 
     /// Returns true if this is a 2D margin (both horizontal and vertical components).
-    pub fn is2D(self: Self) bool {
+    pub fn is2D(self: Margin) bool {
         return !self.isZero() and !self.isVertical() and !self.isHorizontal();
     }
 
     /// Returns the maximum extent in any direction.
-    pub fn maxExtent(self: Self) u32 {
+    pub fn maxExtent(self: Margin) u32 {
         return @max(@max(self.left, self.right), @max(self.top, self.bottom));
     }
 
@@ -78,37 +76,35 @@ pub const Region = struct {
     /// Height of the region (number of rows).
     height: u32,
 
-    const Self = @This();
-
     /// Returns the area of this region (total number of pixels).
-    pub fn area(self: Self) u32 {
+    pub fn area(self: Region) u32 {
         return self.width * self.height;
     }
 
     /// Returns the stop X coordinate (first column outside the region at the right).
-    pub fn stopX(self: Self) i32 {
+    pub fn stopX(self: Region) i32 {
         return self.x + @as(i32, @intCast(self.width));
     }
 
     /// Returns the stop Y coordinate (first row outside the region at the bottom).
-    pub fn stopY(self: Self) i32 {
+    pub fn stopY(self: Region) i32 {
         return self.y + @as(i32, @intCast(self.height));
     }
 
     /// Returns true if the point (px, py) lies inside this region.
-    pub fn contains(self: Self, px: i32, py: i32) bool {
+    pub fn contains(self: Region, px: i32, py: i32) bool {
         return self.x <= px and px < self.stopX() and self.y <= py and py < self.stopY();
     }
 
     /// Returns true if the given region lies entirely inside this region.
-    pub fn containsRegion(self: Self, other: Self) bool {
+    pub fn containsRegion(self: Region, other: Region) bool {
         return self.x <= other.x and self.stopX() >= other.stopX() and
             self.y <= other.y and self.stopY() >= other.stopY();
     }
 
     /// Returns a region starting left columns and above rows before and stopping
     /// right columns and below rows after the current region.
-    pub fn inflated(self: Self, left: i32, above: i32, right: i32, below: i32) Self {
+    pub fn inflated(self: Region, left: i32, above: i32, right: i32, below: i32) Region {
         const new_x = self.x - left;
         const new_y = self.y - above;
         const new_stop_x = self.stopX() + right;
@@ -122,12 +118,12 @@ pub const Region = struct {
     }
 
     /// Returns a region inflated by the same margin on all sides.
-    pub fn inflatedUniform(self: Self, margin: i32) Self {
+    pub fn inflatedUniform(self: Region, margin: i32) Region {
         return self.inflated(margin, margin, margin, margin);
     }
 
     /// Returns a region inflated by the dimensions of the given Margin.
-    pub fn inflatedByMargin(self: Self, margin: Margin) Self {
+    pub fn inflatedByMargin(self: Region, margin: Margin) Region {
         return self.inflated(
             @intCast(margin.left),
             @intCast(margin.top),
@@ -138,18 +134,18 @@ pub const Region = struct {
 
     /// Returns a region starting left columns and above rows after and stopping
     /// right columns and below rows before the current region.
-    pub fn deflated(self: Self, left: i32, above: i32, right: i32, below: i32) Self {
+    pub fn deflated(self: Region, left: i32, above: i32, right: i32, below: i32) Region {
         return self.inflated(-left, -above, -right, -below);
     }
 
     /// Returns a region deflated by the same margin on all sides.
-    pub fn deflatedUniform(self: Self, margin: i32) Self {
+    pub fn deflatedUniform(self: Region, margin: i32) Region {
         return self.deflated(margin, margin, margin, margin);
     }
 
     /// Returns a region representing the current region in an image horizontally times wider
     /// and vertically times higher than the current.
-    pub fn upscaled(self: Self, horizontally: i32, vertically: i32) Self {
+    pub fn upscaled(self: Region, horizontally: i32, vertically: i32) Region {
         return .{
             .x = self.x * horizontally,
             .y = self.y * vertically,
@@ -161,7 +157,7 @@ pub const Region = struct {
     /// Returns a region representing the current region in an image horizontally times narrower
     /// and vertically times lower than the current. Start coordinates are rounded down and stop
     /// coordinates are rounded up.
-    pub fn downscaled(self: Self, horizontally: i32, vertically: i32) Self {
+    pub fn downscaled(self: Region, horizontally: i32, vertically: i32) Region {
         const new_x = @divFloor(self.x, horizontally);
         const new_y = @divFloor(self.y, vertically);
         const new_stop_x = divCeil(self.stopX(), horizontally);
@@ -175,13 +171,13 @@ pub const Region = struct {
     }
 
     /// Returns true if the other region intersects with this region.
-    pub fn intersectsWith(self: Self, other: Self) bool {
+    pub fn intersectsWith(self: Region, other: Region) bool {
         return @max(self.x, other.x) < @min(self.stopX(), other.stopX()) and
             @max(self.y, other.y) < @min(self.stopY(), other.stopY());
     }
 
     /// Returns the intersection of two regions.
-    pub fn intersection(self: Self, other: Self) Self {
+    pub fn intersection(self: Region, other: Region) Region {
         const new_x = @max(self.x, other.x);
         const new_y = @max(self.y, other.y);
         const new_stop_x = @min(self.stopX(), other.stopX());
@@ -195,7 +191,7 @@ pub const Region = struct {
     }
 
     /// Returns a region shifted by (dx, dy) — same size, moved origin.
-    pub fn shifted(self: Self, dx: i32, dy: i32) Self {
+    pub fn shifted(self: Region, dx: i32, dy: i32) Region {
         return .{
             .x = self.x + dx,
             .y = self.y + dy,
@@ -205,7 +201,7 @@ pub const Region = struct {
     }
 
     /// Returns the smallest region containing both regions a and b.
-    pub fn merge(self: Self, b: Self) Self {
+    pub fn merge(self: Region, b: Region) Region {
         const new_x = @min(self.x, b.x);
         const new_y = @min(self.y, b.y);
         const new_stop_x = @max(self.stopX(), b.stopX());

@@ -58,9 +58,9 @@ pub inline fn fract(x: f32v) f32v {
 
 /// A periodic triangle function - faster approximation useful in hash functions
 inline fn triangle_func(in: f32v) f32v {
-    const z = in * zpp.splat(f32v, 0.25);
-    const f = zpp.splat(f32v, 2.0) * @abs(z - @floor(z) - zpp.splat(f32v, 0.5));
-    return zpp.splat(f32v, 2.0) * f - zpp.splat(f32v, 1.0);
+    const z = in * zpp.math.splat(f32v, 0.25);
+    const f = zpp.math.splat(f32v, 2.0) * @abs(z - @floor(z) - zpp.math.splat(f32v, 0.5));
+    return zpp.math.splat(f32v, 2.0) * f - zpp.math.splat(f32v, 1.0);
 }
 
 // ============================================================================
@@ -72,17 +72,17 @@ const K2: f32 = 0.211324865; // (3-sqrt(3))/6
 
 inline fn hash(p: Vec2) Vec2 {
     const temp = Vec2{
-        .x = Vec2.dot(p, .{ .x = zpp.splat(f32v, 127.1), .y = zpp.splat(f32v, 311.7) }),
-        .y = Vec2.dot(p, .{ .x = zpp.splat(f32v, 269.5), .y = zpp.splat(f32v, 183.3) }),
+        .x = Vec2.dot(p, .{ .x = zpp.math.splat(f32v, 127.1), .y = zpp.math.splat(f32v, 311.7) }),
+        .y = Vec2.dot(p, .{ .x = zpp.math.splat(f32v, 269.5), .y = zpp.math.splat(f32v, 183.3) }),
     };
     return .{
-        .x = zpp.splat(f32v, -1.0) + zpp.splat(f32v, 2.0) * fract(triangle_func(temp.x) * zpp.splat(f32v, 43758.5453123)),
-        .y = zpp.splat(f32v, -1.0) + zpp.splat(f32v, 2.0) * fract(triangle_func(temp.y) * zpp.splat(f32v, 43758.5453123)),
+        .x = zpp.math.splat(f32v, -1.0) + zpp.math.splat(f32v, 2.0) * fract(triangle_func(temp.x) * zpp.math.splat(f32v, 43758.5453123)),
+        .y = zpp.math.splat(f32v, -1.0) + zpp.math.splat(f32v, 2.0) * fract(triangle_func(temp.y) * zpp.math.splat(f32v, 43758.5453123)),
     };
 }
 
 inline fn toSimplexCell(p: Vec2) Vec2 {
-    const k1 = zpp.splat(f32v, K1);
+    const k1 = zpp.math.splat(f32v, K1);
     return .{
         .x = @floor(p.x + (p.x + p.y) * k1),
         .y = @floor(p.y + (p.x + p.y) * k1),
@@ -90,7 +90,7 @@ inline fn toSimplexCell(p: Vec2) Vec2 {
 }
 
 pub fn noise(p: Vec2) f32v {
-    const k2 = zpp.splat(f32v, K2);
+    const k2 = zpp.math.splat(f32v, K2);
     const i = toSimplexCell(p);
 
     const a: Vec2 = .{
@@ -98,22 +98,22 @@ pub fn noise(p: Vec2) f32v {
         .y = p.y - i.y + (i.x + i.y) * k2,
     };
 
-    const m: f32v = @select(f32, a.x < a.y, zpp.splat(f32v, 0), zpp.splat(f32v, 1));
-    const o: Vec2 = .{ .x = m, .y = zpp.splat(f32v, 1) - m };
+    const m: f32v = @select(f32, a.x < a.y, zpp.math.splat(f32v, 0), zpp.math.splat(f32v, 1));
+    const o: Vec2 = .{ .x = m, .y = zpp.math.splat(f32v, 1) - m };
     const b: Vec2 = .{ .x = a.x - o.x + k2, .y = a.y - o.y + k2 };
     const c: Vec2 = .{
-        .x = a.x - zpp.splat(f32v, 1) + zpp.splat(f32v, 2) * k2,
-        .y = a.y - zpp.splat(f32v, 1) + zpp.splat(f32v, 2) * k2,
+        .x = a.x - zpp.math.splat(f32v, 1) + zpp.math.splat(f32v, 2) * k2,
+        .y = a.y - zpp.math.splat(f32v, 1) + zpp.math.splat(f32v, 2) * k2,
     };
 
-    const h0 = @max(zpp.splat(f32v, 0.5) - Vec2.dot(a, a), zpp.splat(f32v, 0));
-    const h1 = @max(zpp.splat(f32v, 0.5) - Vec2.dot(b, b), zpp.splat(f32v, 0));
-    const h2 = @max(zpp.splat(f32v, 0.5) - Vec2.dot(c, c), zpp.splat(f32v, 0));
+    const h0 = @max(zpp.math.splat(f32v, 0.5) - Vec2.dot(a, a), zpp.math.splat(f32v, 0));
+    const h1 = @max(zpp.math.splat(f32v, 0.5) - Vec2.dot(b, b), zpp.math.splat(f32v, 0));
+    const h2 = @max(zpp.math.splat(f32v, 0.5) - Vec2.dot(c, c), zpp.math.splat(f32v, 0));
     const n0 = h0 * h0 * h0 * h0 * Vec2.dot(a, hash(.{ .x = i.x, .y = i.y }));
     const n1 = h1 * h1 * h1 * h1 * Vec2.dot(b, hash(.{ .x = i.x + o.x, .y = i.y + o.y }));
-    const n2 = h2 * h2 * h2 * h2 * Vec2.dot(c, hash(.{ .x = i.x + zpp.splat(f32v, 1), .y = i.y + zpp.splat(f32v, 1) }));
+    const n2 = h2 * h2 * h2 * h2 * Vec2.dot(c, hash(.{ .x = i.x + zpp.math.splat(f32v, 1), .y = i.y + zpp.math.splat(f32v, 1) }));
 
-    return (n0 + n1 + n2) * zpp.splat(f32v, 70);
+    return (n0 + n1 + n2) * zpp.math.splat(f32v, 70);
 }
 
 // ============================================================================
@@ -131,7 +131,7 @@ pub fn noiseKernel(ctx: NoiseContext, x: f32v, y: f32v) f32v {
     const ys = y / ctx.scale;
     const n = noise(.{ .x = xs, .y = ys });
     // Map from [-1, 1] to [0, 1]
-    return n * zpp.splat(f32v, 0.5) + zpp.splat(f32v, 0.5);
+    return n * zpp.math.splat(f32v, 0.5) + zpp.math.splat(f32v, 0.5);
 }
 
 // ============================================================================
@@ -178,9 +178,9 @@ pub fn gradientKernel(ctx: GradientContext, in: anytype) f32v {
     const bc = in.getAt(0, 1); // bottom-center
     const br = in.getAt(1, 1); // bottom-right
 
-    const two: f32v = zpp.splat(f32v, 2.0);
-    const quarter: f32v = zpp.splat(f32v, 0.25);
-    const one: f32v = zpp.splat(f32v, 1.0);
+    const two: f32v = zpp.math.splat(f32v, 2.0);
+    const quarter: f32v = zpp.math.splat(f32v, 0.25);
+    const one: f32v = zpp.math.splat(f32v, 1.0);
 
     // Sobel X gradient: horizontal edges
     const gx = (tr - tl) + two * (mr - ml) + (br - bl);
@@ -210,10 +210,10 @@ pub const GammaContext = struct {
 pub fn gammaKernel(ctx: GammaContext, in: anytype) f32v {
     const value = in.get();
     // Clamp to valid range for pow
-    const small: f32v = zpp.splat(f32v, 0.0001);
+    const small: f32v = zpp.math.splat(f32v, 0.0001);
     const clamped = @max(value, small);
     // Apply gamma: v^gamma using exp(gamma * log(v))
-    const gamma_vec: f32v = zpp.splat(f32v, ctx.gamma);
+    const gamma_vec: f32v = zpp.math.splat(f32v, ctx.gamma);
     return @exp(gamma_vec * @log(clamped));
 }
 
@@ -241,11 +241,11 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
     };
 
     // Stage 1: Generate simplex noise (resolution determined by output region)
-    const noise_ctx = NoiseContext{ .scale = zpp.splat(f32v, 50.0) };
+    const noise_ctx = NoiseContext{ .scale = zpp.math.splat(f32v, 50.0) };
     const noise_source = zpp.Generate(f32v, noise_ctx, noiseKernel);
 
     // Stage 2: Resize 2x with bilinear interpolation
-    const resize_ctx = ResizeContext{ .scale = zpp.splat(f32v, 0.5) };
+    const resize_ctx = ResizeContext{ .scale = zpp.math.splat(f32v, 0.5) };
     const resized = zpp.InterpLoop(
         f32v,
         .linear, // Bilinear interpolation
@@ -338,8 +338,8 @@ pub fn main() !void {
 // ============================================================================
 
 test "noise kernel produces valid values" {
-    const ctx = NoiseContext{ .scale = zpp.splat(f32v, 50.0) };
-    const result = noiseKernel(ctx, zpp.splat(f32v, 25.0), zpp.splat(f32v, 25.0));
+    const ctx = NoiseContext{ .scale = zpp.math.splat(f32v, 50.0) };
+    const result = noiseKernel(ctx, zpp.math.splat(f32v, 25.0), zpp.math.splat(f32v, 25.0));
 
     for (0..vec_len) |i| {
         // Output should be in [0, 1] range after mapping
@@ -429,7 +429,7 @@ test "resize with InterpLoop" {
     const source = zpp.In(f32, &source_data, 2, source_region);
     const dest = zpp.Out(f32, &output_data, 4, output_region);
 
-    const resize_ctx = ResizeContext{ .scale = zpp.splat(f32v, 0.5) };
+    const resize_ctx = ResizeContext{ .scale = zpp.math.splat(f32v, 0.5) };
     const resized = zpp.InterpLoop(f32v, .linear, source, output_region, resize_ctx, resizeKernel);
     zpp.Process(resized, dest);
 

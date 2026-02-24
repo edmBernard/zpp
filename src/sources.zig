@@ -8,6 +8,54 @@ const Region = region_mod.Region;
 pub const RepeatEdgePadding = padding_mod.RepeatEdgePadding;
 
 // ============================================================================
+// MARK: Source Helpers
+// ============================================================================
+
+/// Get the region from any source (has getRegion method or region field).
+pub fn getSourceRegion(source: anytype) Region {
+    const T = @TypeOf(source);
+    if (@hasDecl(T, "getRegion")) {
+        return source.getRegion();
+    } else if (@hasField(T, "region")) {
+        return source.region;
+    } else {
+        @compileError("Source must have a region field or getRegion method");
+    }
+}
+
+/// Return type for evalSourceChecked/evalSourceUnchecked.
+fn EvalReturnType(comptime SourceType: type, comptime vec_len: comptime_int, comptime decl_name: []const u8) type {
+    if (@hasDecl(SourceType, decl_name)) {
+        const fn_info = @typeInfo(@TypeOf(@field(SourceType, decl_name)));
+        return fn_info.@"fn".return_type.?;
+    } else {
+        return @Vector(vec_len, SourceType.OutputScalarType);
+    }
+}
+
+/// Evaluate a source at position (x, y) using checked reads.
+pub inline fn evalSourceChecked(comptime SourceType: type, source: SourceType, comptime vec_len: comptime_int, x: i32, y: i32) EvalReturnType(SourceType, vec_len, "evalAt") {
+    if (@hasDecl(SourceType, "evalAt")) {
+        return source.evalAt(x, y);
+    } else if (@hasDecl(SourceType, "readVec")) {
+        return source.readVec(@Vector(vec_len, SourceType.OutputScalarType), x, y);
+    } else {
+        @compileError("Source must have evalAt or readVec method");
+    }
+}
+
+/// Evaluate a source at position (x, y) using unchecked reads (no bounds checking).
+pub inline fn evalSourceUnchecked(comptime SourceType: type, source: SourceType, comptime vec_len: comptime_int, x: i32, y: i32) EvalReturnType(SourceType, vec_len, "evalAtUnchecked") {
+    if (@hasDecl(SourceType, "evalAtUnchecked")) {
+        return source.evalAtUnchecked(x, y);
+    } else if (@hasDecl(SourceType, "readVecUnchecked")) {
+        return source.readVecUnchecked(@Vector(vec_len, SourceType.OutputScalarType), x, y);
+    } else {
+        @compileError("Source must have evalAtUnchecked or readVecUnchecked for split iteration");
+    }
+}
+
+// ============================================================================
 // MARK: Input Sources
 // ============================================================================
 

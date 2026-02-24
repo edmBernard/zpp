@@ -18,9 +18,9 @@ const vec_len = @typeInfo(u8v).vector.len;
 const i32v = zpp.VectorLike(u8v, i32);
 const f32v = zpp.VectorLike(u8v, f32);
 
-/// Convenience alias for zpp.splat with VecF32
+/// Convenience alias for zpp.math.splat with VecF32
 inline fn splat(scalar: f32) f32v {
-    return zpp.splat(f32v, scalar);
+    return zpp.math.splat(f32v, scalar);
 }
 
 // ============================================================================

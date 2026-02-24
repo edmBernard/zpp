@@ -211,11 +211,13 @@ pub fn InterpLoopResult(
         }
 
         fn getSourceRegion(self: Self) Region {
-            if (@hasDecl(SourceType, "getRegion")) {
+            const ST = @TypeOf(self.source);
+            if (@hasDecl(ST, "getRegion")) {
                 return self.source.getRegion();
-            } else if (@hasField(SourceType, "region")) {
+            } else if (@hasField(ST, "region")) {
                 return self.source.region;
             } else {
+                // Fallback for raw data sources without their own region
                 return self.region;
             }
         }

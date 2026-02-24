@@ -97,7 +97,7 @@ fn EvalTranslatedSource(comptime SourceType: type) type {
             if (comptime source_has_interior) {
                 return self.source.getInteriorRegion().shifted(self.dx, self.dy);
             }
-            return .{ .x = 0, .y = 0, .width = 0, .height = 0 };
+            return .{ .width = 0, .height = 0 };
         }
     };
 }

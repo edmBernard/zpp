@@ -13,7 +13,6 @@ const std = @import("std");
 
 const region = @import("region.zig");
 const padding = @import("padding.zig");
-const math = @import("math.zig");
 const sources = @import("sources.zig");
 const translate = @import("translate.zig");
 const zip = @import("zip.zig");
@@ -87,26 +86,4 @@ pub const CachedLoop = cache.CachedLoop;
 // MARK: Math Functions
 // ============================================================================
 
-pub const splat = math.splat;
-pub const abs = math.abs;
-pub const floor = math.floor;
-pub const ceil = math.ceil;
-pub const trunc = math.trunc;
-pub const round = math.round;
-pub const sqrt = math.sqrt;
-pub const sin = math.sin;
-pub const cos = math.cos;
-pub const tan = math.tan;
-pub const exp = math.exp;
-pub const exp2 = math.exp2;
-pub const log = math.log;
-pub const log2 = math.log2;
-pub const log10 = math.log10;
-pub const sign = math.sign;
-pub const pow = math.pow;
-pub const atan2 = math.atan2;
-pub const min = math.min;
-pub const max = math.max;
-pub const clamp = math.clamp;
-pub const lerp = math.lerp;
-pub const fma = math.fma;
+pub const math = @import("math.zig");

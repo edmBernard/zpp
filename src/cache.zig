@@ -7,6 +7,7 @@ const std = @import("std");
 const region_mod = @import("region.zig");
 const loop_mod = @import("loop.zig");
 const zip_mod = @import("zip.zig");
+const sources_mod = @import("sources.zig");
 
 const Region = region_mod.Region;
 const DefaultLoopOptions = loop_mod.DefaultLoopOptions;
@@ -260,16 +261,10 @@ pub fn CachedLoop(
     comptime process_fn: anytype,
     allocator: std.mem.Allocator,
 ) !CachedLoopResult(VecT, @TypeOf(source), @TypeOf(context), process_fn, opts, max_cache_rows) {
-    const SrcType = @TypeOf(source);
     const ElemT = @typeInfo(VecT).vector.child;
     const Cache = RowCache(ElemT, max_cache_rows);
 
-    const region = if (@hasDecl(SrcType, "getRegion"))
-        source.getRegion()
-    else if (@hasField(SrcType, "region"))
-        source.region
-    else
-        @compileError("Source must have a region field or getRegion method");
+    const region = sources_mod.getSourceRegion(source);
 
     const cache = try allocator.create(Cache);
     errdefer allocator.destroy(cache);

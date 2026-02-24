@@ -3,6 +3,7 @@
 const std = @import("std");
 const region_mod = @import("region.zig");
 const zip_mod = @import("zip.zig");
+const sources_mod = @import("sources.zig");
 
 const Region = region_mod.Region;
 const VecTuple = zip_mod.VecTuple;
@@ -81,14 +82,7 @@ pub fn GroupSource(comptime NestedSource: type, comptime P: comptime_int, compti
 /// Group a source expression, treating PxQ blocks as single pixels.
 /// The output region is downscaled by P horizontally and Q vertically.
 pub fn Group(comptime P: comptime_int, comptime Q: comptime_int, source: anytype) GroupSource(@TypeOf(source), P, Q) {
-    const SrcType = @TypeOf(source);
-
-    const nested_region = if (@hasDecl(SrcType, "getRegion"))
-        source.getRegion()
-    else if (@hasField(SrcType, "region"))
-        source.region
-    else
-        @compileError("Source must have a region");
+    const nested_region = sources_mod.getSourceRegion(source);
 
     // The grouped region is downscaled
     const grouped_region = nested_region.downscaled(P, Q);
@@ -144,14 +138,7 @@ pub fn UngroupSource(comptime GroupedSource: type, comptime P: comptime_int, com
 /// Ungroup a grouped source expression back to individual pixels.
 /// The output region is upscaled by P horizontally and Q vertically.
 pub fn Ungroup(comptime P: comptime_int, comptime Q: comptime_int, source: anytype) UngroupSource(@TypeOf(source), P, Q) {
-    const SrcType = @TypeOf(source);
-
-    const grouped_region = if (@hasDecl(SrcType, "getRegion"))
-        source.getRegion()
-    else if (@hasField(SrcType, "region"))
-        source.region
-    else
-        @compileError("Source must have a region");
+    const grouped_region = sources_mod.getSourceRegion(source);
 
     // The ungrouped region is upscaled
     const ungrouped_region = grouped_region.upscaled(P, Q);
@@ -229,14 +216,7 @@ pub fn GroupDest(comptime NestedDest: type, comptime P: comptime_int, comptime Q
 /// Group a destination expression, treating PxQ blocks as single output pixels.
 /// The input region is downscaled by P horizontally and Q vertically.
 pub fn GroupOut(comptime P: comptime_int, comptime Q: comptime_int, dest: anytype) GroupDest(@TypeOf(dest), P, Q) {
-    const DestType = @TypeOf(dest);
-
-    const nested_region = if (@hasDecl(DestType, "getRegion"))
-        dest.getRegion()
-    else if (@hasField(DestType, "region"))
-        dest.region
-    else
-        @compileError("Destination must have a region");
+    const nested_region = sources_mod.getSourceRegion(dest);
 
     // The grouped region is downscaled
     const grouped_region = nested_region.downscaled(P, Q);

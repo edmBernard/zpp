@@ -11,6 +11,7 @@ const region_mod = @import("region.zig");
 const padding_mod = @import("padding.zig");
 const zip_mod = @import("zip.zig");
 const group_mod = @import("group.zig");
+const sources_mod = @import("sources.zig");
 
 const Region = region_mod.Region;
 const Margin = region_mod.Margin;
@@ -327,7 +328,7 @@ pub fn LoopResult(
         pub fn getInteriorRegion(self: Self) Region {
             if (comptime !source_has_unchecked or opts.margin.isZero()) {
                 // No unchecked path available or no margin → no benefit from split
-                return .{ .x = 0, .y = 0, .width = 0, .height = 0 };
+                return .{ .width = 0, .height = 0 };
             }
             // The source region is where data is available
             const src_region = self.region;
@@ -358,19 +359,10 @@ pub fn Loop(
     context: anytype,
     comptime process_fn: anytype,
 ) LoopResult(VecT, @TypeOf(source), @TypeOf(context), process_fn, opts) {
-    const SourceType = @TypeOf(source);
-
-    const region = if (@hasDecl(SourceType, "getRegion"))
-        source.getRegion()
-    else if (@hasField(SourceType, "region"))
-        source.region
-    else
-        @compileError("Source must have a region field or getRegion method");
-
     return .{
         .source = source,
         .context = context,
-        .region = region,
+        .region = sources_mod.getSourceRegion(source),
     };
 }
 
@@ -427,6 +419,9 @@ pub fn Process(source: anytype, dest: anytype) void {
     processStandard(SourceType, DestType, source, dest, region, vec_len, supports_overlapping_writes);
 }
 
+const evalSourceChecked = sources_mod.evalSourceChecked;
+const evalSourceUnchecked = sources_mod.evalSourceUnchecked;
+
 /// Standard processing path without split iteration.
 fn processStandard(
     comptime SourceType: type,
@@ -477,31 +472,13 @@ fn processSplit(
             {
                 var x_coord: i32 = int_x_start;
                 while (x_coord + vec_len <= int_x_stop) : (x_coord += vec_len) {
-                    const result = blk: {
-                        if (@hasDecl(SourceType, "evalAtUnchecked")) {
-                            break :blk source.evalAtUnchecked(x_coord, y_coord);
-                        } else if (@hasDecl(SourceType, "readVecUnchecked")) {
-                            break :blk source.readVecUnchecked(@Vector(vec_len, SourceType.OutputScalarType), x_coord, y_coord);
-                        } else {
-                            @compileError("Source must have evalAtUnchecked or readVecUnchecked for split iteration");
-                        }
-                    };
-                    dest.write(@intCast(x_coord), @intCast(y_coord), result);
+                    dest.write(@intCast(x_coord), @intCast(y_coord), evalSourceUnchecked(SourceType, source, vec_len, x_coord, y_coord));
                 }
                 // Interior remainder (still unchecked, use overlapping write if possible)
                 if (x_coord < int_x_stop) {
                     if (supports_overlapping_writes and int_x_stop - int_x_start >= vec_len) {
                         const aligned_x = int_x_stop - vec_len;
-                        const result = blk: {
-                            if (@hasDecl(SourceType, "evalAtUnchecked")) {
-                                break :blk source.evalAtUnchecked(aligned_x, y_coord);
-                            } else if (@hasDecl(SourceType, "readVecUnchecked")) {
-                                break :blk source.readVecUnchecked(@Vector(vec_len, SourceType.OutputScalarType), aligned_x, y_coord);
-                            } else {
-                                @compileError("Source must have evalAtUnchecked or readVecUnchecked for split iteration");
-                            }
-                        };
-                        dest.write(@intCast(aligned_x), @intCast(y_coord), result);
+                        dest.write(@intCast(aligned_x), @intCast(y_coord), evalSourceUnchecked(SourceType, source, vec_len, aligned_x, y_coord));
                     } else {
                         // Fall back to checked for remaining interior pixels
                         processRowChecked(SourceType, DestType, source, dest, x_coord, int_x_stop, y_coord, vec_len, supports_overlapping_writes);
@@ -574,44 +551,17 @@ fn processRowChecked(
     // Process full vectors
     var x_coord: i32 = x_start;
     while (x_coord + vec_len <= x_stop) : (x_coord += vec_len) {
-        const result = blk: {
-            if (@hasDecl(SourceType, "evalAt")) {
-                break :blk source.evalAt(x_coord, y_coord);
-            } else if (@hasDecl(SourceType, "readVec")) {
-                break :blk source.readVec(@Vector(vec_len, SourceType.OutputScalarType), x_coord, y_coord);
-            } else {
-                @compileError("Source must have evalAt or readVec method");
-            }
-        };
-        dest.write(@intCast(x_coord), @intCast(y_coord), result);
+        dest.write(@intCast(x_coord), @intCast(y_coord), evalSourceChecked(SourceType, source, vec_len, x_coord, y_coord));
     }
 
     // Handle remaining pixels
     if (x_coord < x_stop) {
         if (supports_overlapping_writes and width >= vec_len) {
             const aligned_x = x_stop - vec_len;
-            const result = blk: {
-                if (@hasDecl(SourceType, "evalAt")) {
-                    break :blk source.evalAt(aligned_x, y_coord);
-                } else if (@hasDecl(SourceType, "readVec")) {
-                    break :blk source.readVec(@Vector(vec_len, SourceType.OutputScalarType), aligned_x, y_coord);
-                } else {
-                    @compileError("Source must have evalAt or readVec method");
-                }
-            };
-            dest.write(@intCast(aligned_x), @intCast(y_coord), result);
+            dest.write(@intCast(aligned_x), @intCast(y_coord), evalSourceChecked(SourceType, source, vec_len, aligned_x, y_coord));
         } else {
             while (x_coord < x_stop) : (x_coord += 1) {
-                const result = blk: {
-                    if (@hasDecl(SourceType, "evalAt")) {
-                        break :blk source.evalAt(x_coord, y_coord);
-                    } else if (@hasDecl(SourceType, "readVec")) {
-                        break :blk source.readVec(@Vector(vec_len, SourceType.OutputScalarType), x_coord, y_coord);
-                    } else {
-                        @compileError("Source must have evalAt or readVec method");
-                    }
-                };
-                dest.writeScalar(@intCast(x_coord), @intCast(y_coord), firstLane(result));
+                dest.writeScalar(@intCast(x_coord), @intCast(y_coord), firstLane(evalSourceChecked(SourceType, source, vec_len, x_coord, y_coord)));
             }
         }
     }

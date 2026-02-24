@@ -50,7 +50,7 @@ pub const Vec3 = struct {
     z: f32v,
 
     pub inline fn ones() Vec3 {
-        return .{ .x = zpp.splat(f32v, 1.0), .y = zpp.splat(f32v, 1.0), .z = zpp.splat(f32v, 1.0) };
+        return .{ .x = zpp.math.splat(f32v, 1.0), .y = zpp.math.splat(f32v, 1.0), .z = zpp.math.splat(f32v, 1.0) };
     }
 
     pub inline fn mul1(a: Vec3, b: f32v) Vec3 {
@@ -105,23 +105,23 @@ pub inline fn fract(x: f32v) f32v {
 
 /// Perform Hermite interpolation between two values
 pub inline fn smoothstep(edge0: f32v, edge1: f32v, x: f32v) f32v {
-    const t = std.math.clamp((x - edge0) / (edge1 - edge0), zpp.splat(f32v, 0.0), zpp.splat(f32v, 1.0));
-    return t * t * (zpp.splat(f32v, 3.0) - zpp.splat(f32v, 2.0) * t);
+    const t = std.math.clamp((x - edge0) / (edge1 - edge0), zpp.math.splat(f32v, 0.0), zpp.math.splat(f32v, 1.0));
+    return t * t * (zpp.math.splat(f32v, 3.0) - zpp.math.splat(f32v, 2.0) * t);
 }
 
 /// A periodic triangle function - faster approximation of sin
 inline fn triangle_func(in: f32v) f32v {
-    const z = in * zpp.splat(f32v, 0.25);
-    const f = zpp.splat(f32v, 2.0) * @abs(z - @floor(z) - zpp.splat(f32v, 0.5));
-    return zpp.splat(f32v, 2.0) * f - zpp.splat(f32v, 1.0);
+    const z = in * zpp.math.splat(f32v, 0.25);
+    const f = zpp.math.splat(f32v, 2.0) * @abs(z - @floor(z) - zpp.math.splat(f32v, 0.5));
+    return zpp.math.splat(f32v, 2.0) * f - zpp.math.splat(f32v, 1.0);
 }
 
 /// Convert hex color (0xRRGGBBAA) to Vec3
 inline fn hexToVec3(comptime hex: u32) Vec3 {
     return .{
-        .x = zpp.splat(f32v, @as(f32, @floatFromInt((hex & 0xFF000000) >> 24)) / 255.0),
-        .y = zpp.splat(f32v, @as(f32, @floatFromInt((hex & 0x00FF0000) >> 16)) / 255.0),
-        .z = zpp.splat(f32v, @as(f32, @floatFromInt((hex & 0x0000FF00) >> 8)) / 255.0),
+        .x = zpp.math.splat(f32v, @as(f32, @floatFromInt((hex & 0xFF000000) >> 24)) / 255.0),
+        .y = zpp.math.splat(f32v, @as(f32, @floatFromInt((hex & 0x00FF0000) >> 16)) / 255.0),
+        .z = zpp.math.splat(f32v, @as(f32, @floatFromInt((hex & 0x0000FF00) >> 8)) / 255.0),
     };
 }
 
@@ -137,12 +137,12 @@ const K2: f32 = 0.211324865; // (3-sqrt(3))/6
 /// This is a pure SIMD function - very fast as it's all ALU operations with no memory access.
 inline fn hash(p: Vec2) Vec2 {
     const temp = Vec2{
-        .x = Vec2.dot(p, .{ .x = zpp.splat(f32v, 127.1), .y = zpp.splat(f32v, 311.7) }),
-        .y = Vec2.dot(p, .{ .x = zpp.splat(f32v, 269.5), .y = zpp.splat(f32v, 183.3) }),
+        .x = Vec2.dot(p, .{ .x = zpp.math.splat(f32v, 127.1), .y = zpp.math.splat(f32v, 311.7) }),
+        .y = Vec2.dot(p, .{ .x = zpp.math.splat(f32v, 269.5), .y = zpp.math.splat(f32v, 183.3) }),
     };
     return .{
-        .x = zpp.splat(f32v, -1.0) + zpp.splat(f32v, 2.0) * fract(triangle_func(temp.x) * zpp.splat(f32v, 43758.5453123)),
-        .y = zpp.splat(f32v, -1.0) + zpp.splat(f32v, 2.0) * fract(triangle_func(temp.y) * zpp.splat(f32v, 43758.5453123)),
+        .x = zpp.math.splat(f32v, -1.0) + zpp.math.splat(f32v, 2.0) * fract(triangle_func(temp.x) * zpp.math.splat(f32v, 43758.5453123)),
+        .y = zpp.math.splat(f32v, -1.0) + zpp.math.splat(f32v, 2.0) * fract(triangle_func(temp.y) * zpp.math.splat(f32v, 43758.5453123)),
     };
 }
 
@@ -153,7 +153,7 @@ inline fn hash(p: Vec2) Vec2 {
 /// Compute simplex grid base coordinate from world coordinate (the skewing transform).
 /// Returns the integer simplex cell coordinate.
 inline fn toSimplexCell(p: Vec2) Vec2 {
-    const k1 = zpp.splat(f32v, K1);
+    const k1 = zpp.math.splat(f32v, K1);
     return .{
         .x = @floor(p.x + (p.x + p.y) * k1),
         .y = @floor(p.y + (p.x + p.y) * k1),
@@ -163,7 +163,7 @@ inline fn toSimplexCell(p: Vec2) Vec2 {
 /// 2D Simplex noise implementation.
 /// Uses direct hash computation for optimal SIMD performance.
 fn noise(p: Vec2) f32v {
-    const k2 = zpp.splat(f32v, K2);
+    const k2 = zpp.math.splat(f32v, K2);
 
     // Compute simplex cell coordinate
     const i = toSimplexCell(p);
@@ -175,31 +175,31 @@ fn noise(p: Vec2) f32v {
     };
 
     // Determine which simplex (lower or upper triangle)
-    const m: f32v = @select(f32, a.x < a.y, zpp.splat(f32v, 0), zpp.splat(f32v, 1));
-    const o: Vec2 = .{ .x = m, .y = zpp.splat(f32v, 1.0) - m };
+    const m: f32v = @select(f32, a.x < a.y, zpp.math.splat(f32v, 0), zpp.math.splat(f32v, 1));
+    const o: Vec2 = .{ .x = m, .y = zpp.math.splat(f32v, 1.0) - m };
 
     // Offsets for other two vertices
     const b: Vec2 = .{ .x = a.x - o.x + k2, .y = a.y - o.y + k2 };
     const c: Vec2 = .{
-        .x = a.x - zpp.splat(f32v, 1.0) + zpp.splat(f32v, 2.0) * k2,
-        .y = a.y - zpp.splat(f32v, 1.0) + zpp.splat(f32v, 2.0) * k2,
+        .x = a.x - zpp.math.splat(f32v, 1.0) + zpp.math.splat(f32v, 2.0) * k2,
+        .y = a.y - zpp.math.splat(f32v, 1.0) + zpp.math.splat(f32v, 2.0) * k2,
     };
 
     // Falloff weights (radial basis functions)
     const h: Vec3 = .{
-        .x = @max(zpp.splat(f32v, 0.5) - Vec2.dot(a, a), zpp.splat(f32v, 0)),
-        .y = @max(zpp.splat(f32v, 0.5) - Vec2.dot(b, b), zpp.splat(f32v, 0)),
-        .z = @max(zpp.splat(f32v, 0.5) - Vec2.dot(c, c), zpp.splat(f32v, 0)),
+        .x = @max(zpp.math.splat(f32v, 0.5) - Vec2.dot(a, a), zpp.math.splat(f32v, 0)),
+        .y = @max(zpp.math.splat(f32v, 0.5) - Vec2.dot(b, b), zpp.math.splat(f32v, 0)),
+        .z = @max(zpp.math.splat(f32v, 0.5) - Vec2.dot(c, c), zpp.math.splat(f32v, 0)),
     };
 
     // Compute hash at the three simplex vertices and dot with offset
     const n: Vec3 = .{
         .x = h.x * h.x * h.x * h.x * Vec2.dot(a, hash(.{ .x = i.x, .y = i.y })),
         .y = h.y * h.y * h.y * h.y * Vec2.dot(b, hash(.{ .x = i.x + o.x, .y = i.y + o.y })),
-        .z = h.z * h.z * h.z * h.z * Vec2.dot(c, hash(.{ .x = i.x + zpp.splat(f32v, 1.0), .y = i.y + zpp.splat(f32v, 1.0) })),
+        .z = h.z * h.z * h.z * h.z * Vec2.dot(c, hash(.{ .x = i.x + zpp.math.splat(f32v, 1.0), .y = i.y + zpp.math.splat(f32v, 1.0) })),
     };
 
-    return (n.x + n.y + n.z) * zpp.splat(f32v, 70);
+    return (n.x + n.y + n.z) * zpp.math.splat(f32v, 70);
 }
 
 // ============================================================================
@@ -210,23 +210,23 @@ fn noise(p: Vec2) f32v {
 const angle = std.math.pi / 4.0;
 const rotation_mtx = Mat2x2{
     .data = [4]f32v{
-        zpp.splat(f32v, @cos(angle)),
-        zpp.splat(f32v, @sin(angle)),
-        zpp.splat(f32v, -@sin(angle)),
-        zpp.splat(f32v, @cos(angle)),
+        zpp.math.splat(f32v, @cos(angle)),
+        zpp.math.splat(f32v, @sin(angle)),
+        zpp.math.splat(f32v, -@sin(angle)),
+        zpp.math.splat(f32v, @cos(angle)),
     },
 };
 
 /// Fractional Brownian motion (fBm) - sums multiple octaves of noise
 fn fbm(comptime octaves: i32, vec: Vec2) f32v {
     const H = 1.0; // Hurst exponent
-    const G = zpp.splat(f32v, std.math.exp2(-H));
-    var f = zpp.splat(f32v, 1.0);
-    var a = zpp.splat(f32v, 0.5);
-    var t = zpp.splat(f32v, 0.0);
+    const G = zpp.math.splat(f32v, std.math.exp2(-H));
+    var f = zpp.math.splat(f32v, 1.0);
+    var a = zpp.math.splat(f32v, 0.5);
+    var t = zpp.math.splat(f32v, 0.0);
     inline for (0..octaves) |_| {
         t += a * noise(rotation_mtx.mulvec2(vec).mul1(f));
-        f *= zpp.splat(f32v, 1.9);
+        f *= zpp.math.splat(f32v, 1.9);
         a *= G;
     }
     return t;
@@ -236,18 +236,18 @@ fn fbm(comptime octaves: i32, vec: Vec2) f32v {
 fn pattern(p: Vec2) struct { f32v, Vec2, Vec2 } {
     // Low frequency layer
     const q: Vec2 = .{
-        .x = zpp.splat(f32v, 0.5) + zpp.splat(f32v, 0.5) * fbm(8, .{ .x = p.x + zpp.splat(f32v, 1.1), .y = p.y + zpp.splat(f32v, 0.1) }),
-        .y = zpp.splat(f32v, 0.5) + zpp.splat(f32v, 0.5) * fbm(8, .{ .x = p.x + zpp.splat(f32v, 5.1), .y = p.y + zpp.splat(f32v, 1.5) }),
+        .x = zpp.math.splat(f32v, 0.5) + zpp.math.splat(f32v, 0.5) * fbm(8, .{ .x = p.x + zpp.math.splat(f32v, 1.1), .y = p.y + zpp.math.splat(f32v, 0.1) }),
+        .y = zpp.math.splat(f32v, 0.5) + zpp.math.splat(f32v, 0.5) * fbm(8, .{ .x = p.x + zpp.math.splat(f32v, 5.1), .y = p.y + zpp.math.splat(f32v, 1.5) }),
     };
 
     // Mid frequency layer
     const r: Vec2 = .{
-        .x = zpp.splat(f32v, 0.5) - zpp.splat(f32v, 0.5) * fbm(6, .{ .x = p.x + zpp.splat(f32v, 6.1) * q.x, .y = p.y + zpp.splat(f32v, 6.1) * q.y }),
-        .y = zpp.splat(f32v, 0.5) - zpp.splat(f32v, 0.5) * fbm(6, .{ .x = p.x + zpp.splat(f32v, 6.1) * q.x, .y = p.y + zpp.splat(f32v, 6.1) * q.y }),
+        .x = zpp.math.splat(f32v, 0.5) - zpp.math.splat(f32v, 0.5) * fbm(6, .{ .x = p.x + zpp.math.splat(f32v, 6.1) * q.x, .y = p.y + zpp.math.splat(f32v, 6.1) * q.y }),
+        .y = zpp.math.splat(f32v, 0.5) - zpp.math.splat(f32v, 0.5) * fbm(6, .{ .x = p.x + zpp.math.splat(f32v, 6.1) * q.x, .y = p.y + zpp.math.splat(f32v, 6.1) * q.y }),
     };
 
     // High frequency layer
-    const f = zpp.splat(f32v, 0.5) + zpp.splat(f32v, 0.5) * fbm(10, p.add(r.mul1(zpp.splat(f32v, 8.1))));
+    const f = zpp.math.splat(f32v, 0.5) + zpp.math.splat(f32v, 0.5) * fbm(10, p.add(r.mul1(zpp.math.splat(f32v, 8.1))));
     return .{ f, r, q };
 }
 
@@ -272,11 +272,11 @@ inline fn applyColorMapping(f: f32v, r: Vec2, q: Vec2) Vec3 {
     // Add extra color in dark areas
     col = col.lerp(
         hexToVec3(0x290202ff),
-        zpp.splat(f32v, 0.5) * smoothstep(zpp.splat(f32v, 1.1), zpp.splat(f32v, 1.3), @abs(r.x) + @abs(r.y)),
+        zpp.math.splat(f32v, 0.5) * smoothstep(zpp.math.splat(f32v, 1.1), zpp.math.splat(f32v, 1.3), @abs(r.x) + @abs(r.y)),
     );
 
     // Increase contrast on high frequency details
-    col = col.mul1(f * zpp.splat(f32v, 2.0));
+    col = col.mul1(f * zpp.math.splat(f32v, 2.0));
     // Invert and apply gamma curve
     const temp = Vec3.ones().sub(col);
     return temp.pow(3);
@@ -313,8 +313,8 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
 
     const time: f32 = 125.0;
     const context = DomainWarpingContext{
-        .scale = zpp.splat(f32v, 1000.0),
-        .sin_time = zpp.splat(f32v, @sin(time)),
+        .scale = zpp.math.splat(f32v, 1000.0),
+        .sin_time = zpp.math.splat(f32v, @sin(time)),
     };
 
     const region = zpp.Region{
@@ -380,7 +380,7 @@ pub fn main() !void {
 // ============================================================================
 
 test "simplex noise produces values in expected range" {
-    const p = Vec2{ .x = zpp.splat(f32v, 0.5), .y = zpp.splat(f32v, 0.5) };
+    const p = Vec2{ .x = zpp.math.splat(f32v, 0.5), .y = zpp.math.splat(f32v, 0.5) };
     const n = noise(p);
     for (0..vec_len) |i| {
         try std.testing.expect(n[i] >= -2.0 and n[i] <= 2.0);
@@ -388,7 +388,7 @@ test "simplex noise produces values in expected range" {
 }
 
 test "fbm produces values" {
-    const p = Vec2{ .x = zpp.splat(f32v, 0.5), .y = zpp.splat(f32v, 0.5) };
+    const p = Vec2{ .x = zpp.math.splat(f32v, 0.5), .y = zpp.math.splat(f32v, 0.5) };
     const f = fbm(4, p);
     for (0..vec_len) |i| {
         try std.testing.expect(!std.math.isNan(f[i]));
@@ -397,10 +397,10 @@ test "fbm produces values" {
 
 test "domain warping kernel produces valid RGB" {
     const ctx = DomainWarpingContext{
-        .scale = zpp.splat(f32v, 1000.0),
-        .sin_time = zpp.splat(f32v, 0.0),
+        .scale = zpp.math.splat(f32v, 1000.0),
+        .sin_time = zpp.math.splat(f32v, 0.0),
     };
-    const rgb = domainWarpingProcess(ctx, zpp.splat(f32v, 100.0), zpp.splat(f32v, 100.0));
+    const rgb = domainWarpingProcess(ctx, zpp.math.splat(f32v, 100.0), zpp.math.splat(f32v, 100.0));
 
     for (0..vec_len) |i| {
         // RGB values are u8, so always in [0, 255] range
@@ -417,7 +417,7 @@ test "zpp.Region integration" {
 }
 
 test "toSimplexCell computes correct cell coordinates" {
-    const p = Vec2{ .x = zpp.splat(f32v, 0.0), .y = zpp.splat(f32v, 0.0) };
+    const p = Vec2{ .x = zpp.math.splat(f32v, 0.0), .y = zpp.math.splat(f32v, 0.0) };
     const cell = toSimplexCell(p);
 
     // At origin, cell should be (0, 0)
@@ -428,8 +428,8 @@ test "toSimplexCell computes correct cell coordinates" {
 }
 
 test "hash function produces consistent values" {
-    const p1 = Vec2{ .x = zpp.splat(f32v, 1.0), .y = zpp.splat(f32v, 2.0) };
-    const p2 = Vec2{ .x = zpp.splat(f32v, 1.0), .y = zpp.splat(f32v, 2.0) };
+    const p1 = Vec2{ .x = zpp.math.splat(f32v, 1.0), .y = zpp.math.splat(f32v, 2.0) };
+    const p2 = Vec2{ .x = zpp.math.splat(f32v, 1.0), .y = zpp.math.splat(f32v, 2.0) };
 
     const h1 = hash(p1);
     const h2 = hash(p2);

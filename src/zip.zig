@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const region_mod = @import("region.zig");
+const sources_mod = @import("sources.zig");
 
 const Region = region_mod.Region;
 
@@ -11,58 +12,12 @@ const Region = region_mod.Region;
 
 /// Helper to create a tuple type from an array of types
 pub fn SourceTuple(comptime Types: []const type) type {
-    var fields: [Types.len]std.builtin.Type.StructField = undefined;
-    for (Types, 0..) |T, i| {
-        fields[i] = .{
-            .name = std.fmt.comptimePrint("{d}", .{i}),
-            .type = T,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(T),
-        };
-    }
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &fields,
-            .decls = &.{},
-            .is_tuple = true,
-        },
-    });
+    return std.meta.Tuple(Types);
 }
 
 /// Helper to create a tuple type of N identical types
 pub fn VecTuple(comptime count: comptime_int, comptime VecT: type) type {
-    var fields: [count]std.builtin.Type.StructField = undefined;
-    for (0..count) |i| {
-        fields[i] = .{
-            .name = std.fmt.comptimePrint("{d}", .{i}),
-            .type = VecT,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(VecT),
-        };
-    }
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &fields,
-            .decls = &.{},
-            .is_tuple = true,
-        },
-    });
-}
-
-/// Helper to get the region from a source
-pub fn getSourceRegion(source: anytype) Region {
-    const T = @TypeOf(source);
-    if (@hasDecl(T, "getRegion")) {
-        return source.getRegion();
-    } else if (@hasField(T, "region")) {
-        return source.region;
-    } else {
-        @compileError("Source must have a region field or getRegion method");
-    }
+    return std.meta.Tuple(&([1]type{VecT} ** count));
 }
 
 /// Helper to extract source types from a tuple type as an array
@@ -160,15 +115,7 @@ pub fn ZipSource(comptime source_count: comptime_int, comptime SourceTypes: [sou
             var result: ResultTuple = undefined;
 
             inline for (0..source_count) |i| {
-                const SourceT = SourceTypes[i];
-                if (@hasDecl(SourceT, "evalAt")) {
-                    result[i] = self.sources[i].evalAt(x, y);
-                } else if (@hasDecl(SourceT, "readVec")) {
-                    // InputSource with readVec method (vectorized SIMD read)
-                    result[i] = self.sources[i].readVec(VecT, x, y);
-                } else {
-                    @compileError("Source must have evalAt or readVec method");
-                }
+                result[i] = sources_mod.evalSourceChecked(SourceTypes[i], self.sources[i], vec_len, x, y);
             }
 
             return result;
@@ -192,9 +139,9 @@ pub fn Zip(sources: anytype) ZipSource(tupleLen(@TypeOf(sources)), sourceTypesFr
     }
 
     // Compute intersection of all regions
-    var combined_region = getSourceRegion(sources[0]);
+    var combined_region = sources_mod.getSourceRegion(sources[0]);
     inline for (1..field_count) |i| {
-        const region_i = getSourceRegion(sources[i]);
+        const region_i = sources_mod.getSourceRegion(sources[i]);
         combined_region = combined_region.intersection(region_i);
     }
 
@@ -296,15 +243,7 @@ pub fn UnzipSource(comptime ZippedSource: type, comptime channel: usize) type {
 
         /// For expression tree chaining - evaluate at position
         pub inline fn evalAt(self: Self, x: i32, y: i32) VecT {
-            const nested = self.getNestedSource();
-            if (@hasDecl(NestedSourceType, "evalAt")) {
-                return nested.evalAt(x, y);
-            } else if (@hasDecl(NestedSourceType, "readVec")) {
-                // InputSource with readVec method (vectorized SIMD read)
-                return nested.readVec(VecT, x, y);
-            } else {
-                @compileError("Nested source must have evalAt or readVec method");
-            }
+            return sources_mod.evalSourceChecked(NestedSourceType, self.getNestedSource(), vec_len, x, y);
         }
     };
 }
@@ -312,25 +251,11 @@ pub fn UnzipSource(comptime ZippedSource: type, comptime channel: usize) type {
 /// Helper type for Unzip return value - creates a tuple of UnzipSource types
 fn UnzipResultType(comptime ZippedType: type) type {
     const source_count = ZippedType.count;
-    var fields: [source_count]std.builtin.Type.StructField = undefined;
+    var types: [source_count]type = undefined;
     inline for (0..source_count) |i| {
-        const UnzipT = UnzipSource(ZippedType, i);
-        fields[i] = .{
-            .name = std.fmt.comptimePrint("{d}", .{i}),
-            .type = UnzipT,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(UnzipT),
-        };
+        types[i] = UnzipSource(ZippedType, i);
     }
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &fields,
-            .decls = &.{},
-            .is_tuple = true,
-        },
-    });
+    return std.meta.Tuple(&types);
 }
 
 /// Unzip a zipped source into its component sources.
