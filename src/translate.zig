@@ -6,7 +6,7 @@
 //! the remapped position.
 //!
 //! This is a zero-cost abstraction at the interior: translated reads
-//! remain contiguous SIMD loads, unlike InterpLoop(.Nearest) which
+//! remain contiguous SIMD loads, unlike InterpLoop(.nearest) which
 //! would fall back to scalar gather.
 
 const region_mod = @import("region.zig");

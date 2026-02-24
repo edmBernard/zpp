@@ -29,7 +29,7 @@ test "SIMD math functions" {
 
     // Test abs
     const neg_vec: VecF32 = .{ -1.0, 2.0, -3.0, 4.0 };
-    const abs_result = zpp.abs(VecF32, neg_vec);
+    const abs_result = zpp.abs(neg_vec);
     try std.testing.expectEqual(@as(f32, 1.0), abs_result[0]);
     try std.testing.expectEqual(@as(f32, 2.0), abs_result[1]);
     try std.testing.expectEqual(@as(f32, 3.0), abs_result[2]);
@@ -37,14 +37,14 @@ test "SIMD math functions" {
 
     // Test floor
     const float_vec: VecF32 = .{ 1.7, 2.3, -1.5, -2.9 };
-    const floor_result = zpp.floor(VecF32, float_vec);
+    const floor_result = zpp.floor(float_vec);
     try std.testing.expectEqual(@as(f32, 1.0), floor_result[0]);
     try std.testing.expectEqual(@as(f32, 2.0), floor_result[1]);
     try std.testing.expectEqual(@as(f32, -2.0), floor_result[2]);
     try std.testing.expectEqual(@as(f32, -3.0), floor_result[3]);
 
     // Test ceil
-    const ceil_result = zpp.ceil(VecF32, float_vec);
+    const ceil_result = zpp.ceil(float_vec);
     try std.testing.expectEqual(@as(f32, 2.0), ceil_result[0]);
     try std.testing.expectEqual(@as(f32, 3.0), ceil_result[1]);
     try std.testing.expectEqual(@as(f32, -1.0), ceil_result[2]);
@@ -52,7 +52,7 @@ test "SIMD math functions" {
 
     // Test sqrt
     const sqrt_vec: VecF32 = .{ 4.0, 9.0, 16.0, 25.0 };
-    const sqrt_result = zpp.sqrt(VecF32, sqrt_vec);
+    const sqrt_result = zpp.sqrt(sqrt_vec);
     try std.testing.expectEqual(@as(f32, 2.0), sqrt_result[0]);
     try std.testing.expectEqual(@as(f32, 3.0), sqrt_result[1]);
     try std.testing.expectEqual(@as(f32, 4.0), sqrt_result[2]);
@@ -60,7 +60,7 @@ test "SIMD math functions" {
 
     // Test sign
     const sign_vec: VecF32 = .{ -5.0, 0.0, 3.0, -0.1 };
-    const sign_result = zpp.sign(VecF32, sign_vec);
+    const sign_result = zpp.sign(sign_vec);
     try std.testing.expectEqual(@as(f32, -1.0), sign_result[0]);
     try std.testing.expectEqual(@as(f32, 0.0), sign_result[1]);
     try std.testing.expectEqual(@as(f32, 1.0), sign_result[2]);
@@ -69,8 +69,8 @@ test "SIMD math functions" {
     // Test min/max
     const a: VecF32 = .{ 1.0, 5.0, 3.0, 8.0 };
     const b: VecF32 = .{ 2.0, 3.0, 4.0, 6.0 };
-    const min_result = zpp.min(VecF32, a, b);
-    const max_result = zpp.max(VecF32, a, b);
+    const min_result = zpp.min(a, b);
+    const max_result = zpp.max(a, b);
     try std.testing.expectEqual(@as(f32, 1.0), min_result[0]);
     try std.testing.expectEqual(@as(f32, 3.0), min_result[1]);
     try std.testing.expectEqual(@as(f32, 3.0), min_result[2]);
@@ -82,7 +82,7 @@ test "SIMD math functions" {
 
     // Test lerp
     const t: VecF32 = @splat(0.5);
-    const lerp_result = zpp.lerp(VecF32, a, b, t);
+    const lerp_result = zpp.lerp(a, b, t);
     try std.testing.expectEqual(@as(f32, 1.5), lerp_result[0]);
     try std.testing.expectEqual(@as(f32, 4.0), lerp_result[1]);
     try std.testing.expectEqual(@as(f32, 3.5), lerp_result[2]);
@@ -90,7 +90,7 @@ test "SIMD math functions" {
 
     // Test fma: a * b + c
     const c: VecF32 = .{ 1.0, 1.0, 1.0, 1.0 };
-    const fma_result = zpp.fma(VecF32, a, b, c);
+    const fma_result = zpp.fma(a, b, c);
     try std.testing.expectEqual(@as(f32, 3.0), fma_result[0]); // 1*2 + 1
     try std.testing.expectEqual(@as(f32, 16.0), fma_result[1]); // 5*3 + 1
     try std.testing.expectEqual(@as(f32, 13.0), fma_result[2]); // 3*4 + 1
@@ -104,7 +104,7 @@ test "SIMD trig functions" {
 
     // Test sin at known values
     const sin_vec: VecF32 = .{ 0.0, pi / 6.0, pi / 2.0, pi };
-    const sin_result = zpp.sin(VecF32, sin_vec);
+    const sin_result = zpp.sin(sin_vec);
     try std.testing.expectApproxEqAbs(@as(f32, 0.0), sin_result[0], tolerance);
     try std.testing.expectApproxEqAbs(@as(f32, 0.5), sin_result[1], tolerance);
     try std.testing.expectApproxEqAbs(@as(f32, 1.0), sin_result[2], tolerance);
@@ -112,7 +112,7 @@ test "SIMD trig functions" {
 
     // Test cos at known values
     const cos_vec: VecF32 = .{ 0.0, pi / 3.0, pi / 2.0, pi };
-    const cos_result = zpp.cos(VecF32, cos_vec);
+    const cos_result = zpp.cos(cos_vec);
     try std.testing.expectApproxEqAbs(@as(f32, 1.0), cos_result[0], tolerance);
     try std.testing.expectApproxEqAbs(@as(f32, 0.5), cos_result[1], tolerance);
     try std.testing.expectApproxEqAbs(@as(f32, 0.0), cos_result[2], tolerance);
@@ -125,7 +125,7 @@ test "SIMD exp and log functions" {
 
     // Test exp
     const exp_vec: VecF32 = .{ 0.0, 1.0, 2.0, -1.0 };
-    const exp_result = zpp.exp(VecF32, exp_vec);
+    const exp_result = zpp.exp(exp_vec);
     try std.testing.expectApproxEqAbs(@as(f32, 1.0), exp_result[0], tolerance); // e^0 = 1
     try std.testing.expectApproxEqAbs(@as(f32, std.math.e), exp_result[1], tolerance); // e^1 = e
     try std.testing.expectApproxEqAbs(@as(f32, std.math.e * std.math.e), exp_result[2], 0.001); // e^2
@@ -133,14 +133,14 @@ test "SIMD exp and log functions" {
 
     // Test log
     const log_vec: VecF32 = .{ 1.0, std.math.e, std.math.e * std.math.e, 10.0 };
-    const log_result = zpp.log(VecF32, log_vec);
+    const log_result = zpp.log(log_vec);
     try std.testing.expectApproxEqAbs(@as(f32, 0.0), log_result[0], tolerance); // ln(1) = 0
     try std.testing.expectApproxEqAbs(@as(f32, 1.0), log_result[1], tolerance); // ln(e) = 1
     try std.testing.expectApproxEqAbs(@as(f32, 2.0), log_result[2], tolerance); // ln(e^2) = 2
 
     // Test log2
     const log2_vec: VecF32 = .{ 1.0, 2.0, 4.0, 8.0 };
-    const log2_result = zpp.log2(VecF32, log2_vec);
+    const log2_result = zpp.log2(log2_vec);
     try std.testing.expectApproxEqAbs(@as(f32, 0.0), log2_result[0], tolerance);
     try std.testing.expectApproxEqAbs(@as(f32, 1.0), log2_result[1], tolerance);
     try std.testing.expectApproxEqAbs(@as(f32, 2.0), log2_result[2], tolerance);
@@ -152,7 +152,7 @@ test "SIMD trunc and round" {
 
     // Test trunc (round towards zero)
     const trunc_vec: VecF32 = .{ 1.7, -1.7, 2.3, -2.3 };
-    const trunc_result = zpp.trunc(VecF32, trunc_vec);
+    const trunc_result = zpp.trunc(trunc_vec);
     try std.testing.expectEqual(@as(f32, 1.0), trunc_result[0]);
     try std.testing.expectEqual(@as(f32, -1.0), trunc_result[1]);
     try std.testing.expectEqual(@as(f32, 2.0), trunc_result[2]);
@@ -160,7 +160,7 @@ test "SIMD trunc and round" {
 
     // Test round (round to nearest)
     const round_vec: VecF32 = .{ 1.4, 1.5, -1.4, -1.5 };
-    const round_result = zpp.round(VecF32, round_vec);
+    const round_result = zpp.round(round_vec);
     try std.testing.expectEqual(@as(f32, 1.0), round_result[0]);
     try std.testing.expectEqual(@as(f32, 2.0), round_result[1]); // round half up
     try std.testing.expectEqual(@as(f32, -1.0), round_result[2]);
@@ -173,7 +173,7 @@ test "SIMD clamp" {
     const values: VecF32 = .{ -5.0, 0.5, 1.5, 10.0 };
     const lo: VecF32 = @splat(0.0);
     const hi: VecF32 = @splat(1.0);
-    const result = zpp.clamp(VecF32, values, lo, hi);
+    const result = zpp.clamp(values, lo, hi);
 
     try std.testing.expectEqual(@as(f32, 0.0), result[0]); // clamped to lo
     try std.testing.expectEqual(@as(f32, 0.5), result[1]); // unchanged
@@ -187,7 +187,7 @@ test "SIMD pow" {
 
     const bases: VecF32 = .{ 2.0, 3.0, 4.0, 10.0 };
     const exponents: VecF32 = .{ 2.0, 2.0, 0.5, 1.0 };
-    const result = zpp.pow(VecF32, bases, exponents);
+    const result = zpp.pow(bases, exponents);
 
     try std.testing.expectApproxEqAbs(@as(f32, 4.0), result[0], tolerance); // 2^2 = 4
     try std.testing.expectApproxEqAbs(@as(f32, 9.0), result[1], tolerance); // 3^2 = 9
@@ -202,7 +202,7 @@ test "SIMD atan2" {
     // Test basic quadrants
     const y: VecF32 = .{ 0.0, 1.0, 0.0, -1.0 };
     const x: VecF32 = .{ 1.0, 0.0, -1.0, 0.0 };
-    const result = zpp.atan2(VecF32, y, x);
+    const result = zpp.atan2(y, x);
 
     try std.testing.expectApproxEqAbs(@as(f32, 0.0), result[0], tolerance); // atan2(0, 1) = 0
     try std.testing.expectApproxEqAbs(@as(f32, std.math.pi / 2.0), result[1], tolerance); // atan2(1, 0) = pi/2

@@ -42,9 +42,6 @@ pub fn VectorLike(comptime VectorType: type, comptime ScalarType: type) type {
 // Region module
 pub const Region = region.Region;
 pub const Margin = region.Margin;
-pub const marginH = region.marginH;
-pub const marginV = region.marginV;
-pub const marginI = region.marginI;
 
 // Padding module
 pub const ZeroPadding = padding.ZeroPadding;

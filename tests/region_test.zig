@@ -17,7 +17,7 @@ test "Margin predicates comprehensive" {
 
     // Horizontal margin
     const horiz_manual: zpp.Margin = .{ .left = 2, .right = 2 };
-    const horiz = zpp.marginH(2);
+    const horiz = zpp.Margin.horizontal(2);
     try std.testing.expectEqual(horiz, horiz_manual);
     try std.testing.expect(!horiz.isZero());
     try std.testing.expect(horiz.isHorizontal());
@@ -28,7 +28,7 @@ test "Margin predicates comprehensive" {
 
     // Vertical margin
     const vert_manual: zpp.Margin = .{ .top = 3, .bottom = 3 };
-    const vert = zpp.marginV(3);
+    const vert = zpp.Margin.vertical(3);
     try std.testing.expectEqual(vert, vert_manual);
     try std.testing.expect(!vert.isZero());
     try std.testing.expect(!vert.isHorizontal());
@@ -39,7 +39,7 @@ test "Margin predicates comprehensive" {
 
     // Isotropic margin
     const isot_manual: zpp.Margin = .{ .left = 5, .right = 5, .top = 5, .bottom = 5 };
-    const isot = zpp.marginI(5);
+    const isot = zpp.Margin.uniform(5);
     try std.testing.expectEqual(isot, isot_manual);
     try std.testing.expect(!isot.isZero());
     try std.testing.expect(!isot.isHorizontal());
@@ -59,8 +59,8 @@ test "Margin predicates comprehensive" {
 }
 
 test "Margin helpers" {
-    // marginH
-    const h = zpp.marginH(3);
+    // Margin.horizontal
+    const h = zpp.Margin.horizontal(3);
     try std.testing.expectEqual(@as(u32, 3), h.left);
     try std.testing.expectEqual(@as(u32, 3), h.right);
     try std.testing.expectEqual(@as(u32, 0), h.top);
@@ -68,8 +68,8 @@ test "Margin helpers" {
     try std.testing.expect(h.isHorizontal());
     try std.testing.expect(!h.isVertical());
 
-    // marginV
-    const v = zpp.marginV(2);
+    // Margin.vertical
+    const v = zpp.Margin.vertical(2);
     try std.testing.expectEqual(@as(u32, 0), v.left);
     try std.testing.expectEqual(@as(u32, 0), v.right);
     try std.testing.expectEqual(@as(u32, 2), v.top);
@@ -77,8 +77,8 @@ test "Margin helpers" {
     try std.testing.expect(v.isVertical());
     try std.testing.expect(!v.isHorizontal());
 
-    // marginI
-    const i = zpp.marginI(4);
+    // Margin.uniform
+    const i = zpp.Margin.uniform(4);
     try std.testing.expectEqual(@as(u32, 4), i.left);
     try std.testing.expectEqual(@as(u32, 4), i.right);
     try std.testing.expectEqual(@as(u32, 4), i.top);
@@ -133,7 +133,7 @@ test "Region operations" {
     try std.testing.expectEqual(@as(u32, 30), inter.height);
 
     // Union
-    const uni = zpp.Region.Union(region, other);
+    const uni = region.merge(other);
     try std.testing.expectEqual(@as(i32, 10), uni.x);
     try std.testing.expectEqual(@as(i32, 20), uni.y);
     try std.testing.expectEqual(@as(u32, 140), uni.width);

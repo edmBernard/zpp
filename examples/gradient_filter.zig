@@ -248,7 +248,7 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
     const resize_ctx = ResizeContext{ .scale = zpp.splat(f32v, 0.5) };
     const resized = zpp.InterpLoop(
         f32v,
-        .Linear, // Bilinear interpolation
+        .linear, // Bilinear interpolation
         noise_source,
         output_region,
         resize_ctx,
@@ -259,7 +259,7 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
     const gradient_ctx = GradientContext{};
     const edges = zpp.Loop(
         f32v,
-        .{ .margin = zpp.marginI(1) }, // Need 1-pixel margin for 3x3 kernel
+        .{ .margin = zpp.Margin.uniform(1) }, // Need 1-pixel margin for 3x3 kernel
         resized,
         gradient_ctx,
         gradientKernel,
@@ -379,7 +379,7 @@ test "gradient kernel detects edges" {
     const dest = zpp.Out(f32, &output, 4, region);
 
     const ctx = GradientContext{};
-    const result = zpp.Loop(f32v, .{ .margin = zpp.marginI(1) }, source, ctx, gradientKernel);
+    const result = zpp.Loop(f32v, .{ .margin = zpp.Margin.uniform(1) }, source, ctx, gradientKernel);
     zpp.Process(result, dest);
 
     // Center column (x=1, x=2) should have high gradient values
@@ -430,7 +430,7 @@ test "resize with InterpLoop" {
     const dest = zpp.Out(f32, &output_data, 4, output_region);
 
     const resize_ctx = ResizeContext{ .scale = zpp.splat(f32v, 0.5) };
-    const resized = zpp.InterpLoop(f32v, .Linear, source, output_region, resize_ctx, resizeKernel);
+    const resized = zpp.InterpLoop(f32v, .linear, source, output_region, resize_ctx, resizeKernel);
     zpp.Process(resized, dest);
 
     // Corner values should be preserved (approximately)

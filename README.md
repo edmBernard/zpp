@@ -135,9 +135,9 @@ const intersection = region.intersection(other);
 `Margin` specifies neighborhood access for loop operation:
 
 ```zig
-const margin = zpp.marginI(1);  // 1 pixel in all directions (3x3 kernel)
-const h_margin = zpp.marginH(2); // 2 pixels horizontally only
-const v_margin = zpp.marginV(1); // 1 pixel vertically only
+const margin = zpp.Margin.uniform(1);     // 1 pixel in all directions (3x3 kernel)
+const h_margin = zpp.Margin.horizontal(2); // 2 pixels horizontally only
+const v_margin = zpp.Margin.vertical(1);   // 1 pixel vertically only
 ```
 
 ### Sources and Destinations
@@ -198,7 +198,7 @@ const generator = zpp.Generate(f32v, context, processFunc);
 const result = zpp.Loop(f32v, .{}, source, context, processFunc);
 
 // With margin for neighborhood access
-const result = zpp.Loop(f32v, .{ .margin = zpp.marginI(1) }, source, context, kernelFunc);
+const result = zpp.Loop(f32v, .{ .margin = zpp.Margin.uniform(1) }, source, context, kernelFunc);
 ```
 
 **Process** executes the pipeline and writes to destination:
@@ -213,8 +213,8 @@ One of ZPP's most powerful features is lazy evaluation through expression trees.
 
 ```zig
 // Chain multiple operations: source -> blur -> sharpen -> gamma
-const step1 = zpp.Loop(f32v, .{ .margin = zpp.marginI(1) }, source, blur_ctx, blurKernel);
-const step2 = zpp.Loop(f32v, .{ .margin = zpp.marginI(1) }, step1, sharpen_ctx, sharpenKernel);
+const step1 = zpp.Loop(f32v, .{ .margin = zpp.Margin.uniform(1) }, source, blur_ctx, blurKernel);
+const step2 = zpp.Loop(f32v, .{ .margin = zpp.Margin.uniform(1) }, step1, sharpen_ctx, sharpenKernel);
 const step3 = zpp.Loop(f32v, .{}, step2, gamma_ctx, gammaKernel);
 
 // Only now is computation triggered - all stages fuse together
@@ -237,7 +237,7 @@ const zipped = zpp.Zip(.{left, right});
 const blended = zpp.Loop(f32v, .{}, zipped, blend_ctx, blendKernel);
 ```
 
-`Translate` preserves contiguous SIMD loads (unlike `InterpLoop` with `.Nearest`) and composes naturally in expression trees.
+`Translate` preserves contiguous SIMD loads (unlike `InterpLoop` with `.nearest`) and composes naturally in expression trees.
 
 ### Interpolated Sampling
 
@@ -255,7 +255,7 @@ const ResizeKernel = struct {
 
 const resized = zpp.InterpLoop(
     f32v,
-    .Linear,        // Interpolation method: .Nearest, .Linear, or .Cubic
+    .linear,        // Interpolation method: .nearest, .linear, or .cubic
     source,
     output_region,
     context,
@@ -345,7 +345,7 @@ src/
 ├── translate.zig     # Zero-cost integer translation (Translate)
 ├── loop.zig          # Core processing primitives (Loop, Generate, Process)
 ├── math.zig          # SIMD math functions (sin, cos, exp, pow, etc.)
-├── interpolation.zig # Interpolation methods (Nearest, Linear, Cubic)
+├── interpolation.zig # Interpolation methods (nearest, linear, cubic)
 ├── padding.zig       # Padding policies (ZeroPadding, RepeatEdgePadding)
 ├── cache.zig         # Row caching for expression trees (RowCache, CachedLoop)
 ├── zip.zig           # Zip/Unzip for multiple sources
@@ -378,8 +378,6 @@ When contributing, follow these conventions:
 - **Types/structs**: `PascalCase`
 - **SIMD functions**: Mark as `inline` for performance
 - **Resource cleanup**: Always pair allocations with `defer`
-
-See `AGENTS.md` for detailed guidelines.
 
 ## License
 

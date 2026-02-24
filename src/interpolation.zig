@@ -12,11 +12,11 @@ const Region = region_mod.Region;
 /// Interpolation method for pixel sampling
 pub const InterpolationMethod = enum {
     /// Nearest neighbor - rounds to nearest integer coordinate
-    Nearest,
+    nearest,
     /// Bilinear - linear interpolation in both directions
-    Linear,
+    linear,
     /// Bicubic - cubic interpolation in both directions
-    Cubic,
+    cubic,
 };
 
 // ============================================================================
@@ -39,9 +39,9 @@ pub fn PixelInterpolator(comptime SourceType: type, comptime VecT: type, comptim
         /// Takes vectors of x and y coordinates and returns interpolated values.
         pub inline fn sample(self: Self, x: VecT, y: VecT) VecT {
             return switch (method) {
-                .Nearest => self.sampleNearest(x, y),
-                .Linear => self.sampleLinear(x, y),
-                .Cubic => self.sampleCubic(x, y),
+                .nearest => self.sampleNearest(x, y),
+                .linear => self.sampleLinear(x, y),
+                .cubic => self.sampleCubic(x, y),
             };
         }
 
@@ -241,7 +241,7 @@ pub fn InterpLoopResult(
 ///         return interp.sample(x, y);  // sample at same coordinates
 ///     }
 /// };
-/// const result = InterpLoop(f32x4, .Linear, source, output_region, ctx, kernel.process);
+/// const result = InterpLoop(f32x4, .linear, source, output_region, ctx, kernel.process);
 /// ```
 ///
 /// Example (scale 2x):

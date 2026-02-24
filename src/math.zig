@@ -24,32 +24,32 @@ pub inline fn splat(comptime VecT: type, scalar: @typeInfo(VecT).vector.child) V
 // ============================================================================
 
 /// Element-wise absolute value for SIMD vectors.
-pub inline fn abs(comptime VecT: type, v: VecT) VecT {
+pub inline fn abs(v: anytype) @TypeOf(v) {
     return @abs(v);
 }
 
 /// Element-wise floor for SIMD vectors.
-pub inline fn floor(comptime VecT: type, v: VecT) VecT {
+pub inline fn floor(v: anytype) @TypeOf(v) {
     return @floor(v);
 }
 
 /// Element-wise ceiling for SIMD vectors.
-pub inline fn ceil(comptime VecT: type, v: VecT) VecT {
+pub inline fn ceil(v: anytype) @TypeOf(v) {
     return @ceil(v);
 }
 
 /// Element-wise truncation (round towards zero) for SIMD vectors.
-pub inline fn trunc(comptime VecT: type, v: VecT) VecT {
+pub inline fn trunc(v: anytype) @TypeOf(v) {
     return @trunc(v);
 }
 
 /// Element-wise round for SIMD vectors.
-pub inline fn round(comptime VecT: type, v: VecT) VecT {
+pub inline fn round(v: anytype) @TypeOf(v) {
     return @round(v);
 }
 
 /// Element-wise square root for SIMD vectors.
-pub inline fn sqrt(comptime VecT: type, v: VecT) VecT {
+pub inline fn sqrt(v: anytype) @TypeOf(v) {
     return @sqrt(v);
 }
 
@@ -58,17 +58,17 @@ pub inline fn sqrt(comptime VecT: type, v: VecT) VecT {
 // ============================================================================
 
 /// Element-wise sine for SIMD vectors.
-pub inline fn sin(comptime VecT: type, v: VecT) VecT {
+pub inline fn sin(v: anytype) @TypeOf(v) {
     return @sin(v);
 }
 
 /// Element-wise cosine for SIMD vectors.
-pub inline fn cos(comptime VecT: type, v: VecT) VecT {
+pub inline fn cos(v: anytype) @TypeOf(v) {
     return @cos(v);
 }
 
 /// Element-wise tangent for SIMD vectors.
-pub inline fn tan(comptime VecT: type, v: VecT) VecT {
+pub inline fn tan(v: anytype) @TypeOf(v) {
     return @tan(v);
 }
 
@@ -77,27 +77,27 @@ pub inline fn tan(comptime VecT: type, v: VecT) VecT {
 // ============================================================================
 
 /// Element-wise exponential (e^x) for SIMD vectors.
-pub inline fn exp(comptime VecT: type, v: VecT) VecT {
+pub inline fn exp(v: anytype) @TypeOf(v) {
     return @exp(v);
 }
 
 /// Element-wise base-2 exponential for SIMD vectors.
-pub inline fn exp2(comptime VecT: type, v: VecT) VecT {
+pub inline fn exp2(v: anytype) @TypeOf(v) {
     return @exp2(v);
 }
 
 /// Element-wise natural logarithm for SIMD vectors.
-pub inline fn log(comptime VecT: type, v: VecT) VecT {
+pub inline fn log(v: anytype) @TypeOf(v) {
     return @log(v);
 }
 
 /// Element-wise base-2 logarithm for SIMD vectors.
-pub inline fn log2(comptime VecT: type, v: VecT) VecT {
+pub inline fn log2(v: anytype) @TypeOf(v) {
     return @log2(v);
 }
 
 /// Element-wise base-10 logarithm for SIMD vectors.
-pub inline fn log10(comptime VecT: type, v: VecT) VecT {
+pub inline fn log10(v: anytype) @TypeOf(v) {
     return @log10(v);
 }
 
@@ -107,7 +107,8 @@ pub inline fn log10(comptime VecT: type, v: VecT) VecT {
 
 /// Element-wise sign function for SIMD vectors.
 /// Returns -1 for negative, 0 for zero, 1 for positive.
-pub inline fn sign(comptime VecT: type, v: VecT) VecT {
+pub inline fn sign(v: anytype) @TypeOf(v) {
+    const VecT = @TypeOf(v);
     const ElemT = @typeInfo(VecT).vector.child;
     const zero: VecT = @splat(0);
     const one: VecT = @splat(1);
@@ -121,7 +122,7 @@ pub inline fn sign(comptime VecT: type, v: VecT) VecT {
 }
 
 /// Element-wise power function for SIMD vectors (base^exp).
-pub inline fn pow(comptime VecT: type, base: VecT, exponent: VecT) VecT {
+pub inline fn pow(base: anytype, exponent: @TypeOf(base)) @TypeOf(base) {
     // Zig doesn't have a built-in @pow for SIMD, so we use exp(exp * log(base))
     // This is valid for positive bases
     return @exp(exponent * @log(base));
@@ -129,7 +130,8 @@ pub inline fn pow(comptime VecT: type, base: VecT, exponent: VecT) VecT {
 
 /// Element-wise atan2 for SIMD vectors.
 /// Returns the angle in radians between the positive x-axis and the point (x, y).
-pub inline fn atan2(comptime VecT: type, y: VecT, x: VecT) VecT {
+pub inline fn atan2(y: anytype, x: @TypeOf(y)) @TypeOf(y) {
+    const VecT = @TypeOf(y);
     // Zig doesn't have built-in @atan2 for SIMD, implement using atan approximation
     // Using the identity: atan2(y, x) = atan(y/x) with quadrant correction
     const ElemT = @typeInfo(VecT).vector.child;
@@ -139,7 +141,7 @@ pub inline fn atan2(comptime VecT: type, y: VecT, x: VecT) VecT {
 
     // Compute atan(y/x) using polynomial approximation
     const ratio = y / x;
-    const atan_val = atanApprox(VecT, ratio);
+    const atan_val = atanApprox(ratio);
 
     // Quadrant correction
     const x_neg = x < zero;
@@ -160,7 +162,8 @@ pub inline fn atan2(comptime VecT: type, y: VecT, x: VecT) VecT {
 
 /// Polynomial approximation for atan for SIMD vectors.
 /// Uses a rational approximation accurate for |x| <= 1.
-fn atanApprox(comptime VecT: type, x: VecT) VecT {
+fn atanApprox(x: anytype) @TypeOf(x) {
+    const VecT = @TypeOf(x);
     const ElemT = @typeInfo(VecT).vector.child;
 
     // For |x| > 1, use atan(x) = pi/2 - atan(1/x)
@@ -190,7 +193,7 @@ fn atanApprox(comptime VecT: type, x: VecT) VecT {
     result = result * x_small;
 
     // For |x| > 1: atan(x) = sign(x) * pi/2 - atan(1/x)
-    const sign_x = sign(VecT, x);
+    const sign_x = sign(x);
     const result_large = sign_x * pi_2 - result;
 
     return @select(ElemT, large, result_large, result);
@@ -201,17 +204,17 @@ fn atanApprox(comptime VecT: type, x: VecT) VecT {
 // ============================================================================
 
 /// Element-wise minimum of two SIMD vectors.
-pub inline fn min(comptime VecT: type, a: VecT, b: VecT) VecT {
+pub inline fn min(a: anytype, b: @TypeOf(a)) @TypeOf(a) {
     return @min(a, b);
 }
 
 /// Element-wise maximum of two SIMD vectors.
-pub inline fn max(comptime VecT: type, a: VecT, b: VecT) VecT {
+pub inline fn max(a: anytype, b: @TypeOf(a)) @TypeOf(a) {
     return @max(a, b);
 }
 
 /// Element-wise clamp of SIMD vector to range [lo, hi].
-pub inline fn clamp(comptime VecT: type, v: VecT, lo: VecT, hi: VecT) VecT {
+pub inline fn clamp(v: anytype, lo: @TypeOf(v), hi: @TypeOf(v)) @TypeOf(v) {
     return @min(@max(v, lo), hi);
 }
 
@@ -221,12 +224,11 @@ pub inline fn clamp(comptime VecT: type, v: VecT, lo: VecT, hi: VecT) VecT {
 
 /// Linear interpolation between two SIMD vectors.
 /// Returns a + t * (b - a), equivalent to mix(a, b, t).
-pub inline fn lerp(comptime VecT: type, a: VecT, b: VecT, t: VecT) VecT {
+pub inline fn lerp(a: anytype, b: @TypeOf(a), t: @TypeOf(a)) @TypeOf(a) {
     return a + t * (b - a);
 }
 
 /// Fused multiply-add for SIMD vectors: a * b + c
-pub inline fn fma(comptime VecT: type, a: VecT, b: VecT, c: VecT) VecT {
-    return @mulAdd(VecT, a, b, c);
+pub inline fn fma(a: anytype, b: @TypeOf(a), c: @TypeOf(a)) @TypeOf(a) {
+    return @mulAdd(@TypeOf(a), a, b, c);
 }
-

@@ -45,22 +45,22 @@ pub const Margin = struct {
     pub fn maxExtent(self: Self) u32 {
         return @max(@max(self.left, self.right), @max(self.top, self.bottom));
     }
+
+    /// Creates a horizontal symmetric margin (left and right equal, top and bottom zero).
+    pub fn horizontal(n: u32) Margin {
+        return .{ .left = n, .right = n, .top = 0, .bottom = 0 };
+    }
+
+    /// Creates a vertical symmetric margin (top and bottom equal, left and right zero).
+    pub fn vertical(n: u32) Margin {
+        return .{ .left = 0, .right = 0, .top = n, .bottom = n };
+    }
+
+    /// Creates an isotropic margin (all sides equal).
+    pub fn uniform(n: u32) Margin {
+        return .{ .left = n, .right = n, .top = n, .bottom = n };
+    }
 };
-
-/// Creates a horizontal symmetric margin (left and right equal, top and bottom zero).
-pub fn marginH(n: u32) Margin {
-    return .{ .left = n, .right = n, .top = 0, .bottom = 0 };
-}
-
-/// Creates a vertical symmetric margin (top and bottom equal, left and right zero).
-pub fn marginV(n: u32) Margin {
-    return .{ .left = 0, .right = 0, .top = n, .bottom = n };
-}
-
-/// Creates an isotropic margin (all sides equal).
-pub fn marginI(n: u32) Margin {
-    return .{ .left = n, .right = n, .top = n, .bottom = n };
-}
 
 // ============================================================================
 // MARK: Region
@@ -205,7 +205,7 @@ pub const Region = struct {
     }
 
     /// Returns the smallest region containing both regions a and b.
-    pub fn Union(self: Self, b: Self) Self {
+    pub fn merge(self: Self, b: Self) Self {
         const new_x = @min(self.x, b.x);
         const new_y = @min(self.y, b.y);
         const new_stop_x = @max(self.stopX(), b.stopX());

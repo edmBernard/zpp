@@ -26,7 +26,7 @@ test "InterpLoop Nearest: identity transform preserves values" {
         }
     };
 
-    const result = zpp.InterpLoop(f32x4, .Nearest, source, region, .{}, interp_kernel.process);
+    const result = zpp.InterpLoop(f32x4, .nearest, source, region, .{}, interp_kernel.process);
     zpp.Process(result, destination);
 
     // Identity transform should copy input to output
@@ -56,7 +56,7 @@ test "InterpLoop Nearest: slightly shifted transform preserves values" {
         }
     };
 
-    const result = zpp.InterpLoop(f32x4, .Nearest, source, region, .{}, interp_kernel.process);
+    const result = zpp.InterpLoop(f32x4, .nearest, source, region, .{}, interp_kernel.process);
     zpp.Process(result, destination);
 
     // Identity transform should copy input to output
@@ -90,7 +90,7 @@ test "InterpLoop: 2x scale with nearest produces correct duplication" {
         }
     };
 
-    const result = zpp.InterpLoop(f32x4, .Nearest, source, output_region, .{}, scale_kernel.process);
+    const result = zpp.InterpLoop(f32x4, .nearest, source, output_region, .{}, scale_kernel.process);
     zpp.Process(result, destination);
 
     const expected_data: [64]f32 = .{
@@ -129,7 +129,7 @@ test "InterpLoop: 2x scale with linear produces correct value" {
         }
     };
 
-    const result = zpp.InterpLoop(f32x4, .Linear, source, output_region, .{}, scale_kernel.process);
+    const result = zpp.InterpLoop(f32x4, .linear, source, output_region, .{}, scale_kernel.process);
     zpp.Process(result, destination);
 
     const expected_data: [64]f32 = .{
