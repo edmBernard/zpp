@@ -81,7 +81,7 @@ pub fn GroupSource(comptime NestedSource: type, comptime P: comptime_int, compti
 
 /// Group a source expression, treating PxQ blocks as single pixels.
 /// The output region is downscaled by P horizontally and Q vertically.
-pub fn Group(comptime P: comptime_int, comptime Q: comptime_int, source: anytype) GroupSource(@TypeOf(source), P, Q) {
+pub fn group(comptime P: comptime_int, comptime Q: comptime_int, source: anytype) GroupSource(@TypeOf(source), P, Q) {
     const nested_region = sources_mod.getSourceRegion(source);
 
     // The grouped region is downscaled
@@ -137,7 +137,7 @@ pub fn UngroupSource(comptime GroupedSource: type, comptime P: comptime_int, com
 
 /// Ungroup a grouped source expression back to individual pixels.
 /// The output region is upscaled by P horizontally and Q vertically.
-pub fn Ungroup(comptime P: comptime_int, comptime Q: comptime_int, source: anytype) UngroupSource(@TypeOf(source), P, Q) {
+pub fn ungroup(comptime P: comptime_int, comptime Q: comptime_int, source: anytype) UngroupSource(@TypeOf(source), P, Q) {
     const grouped_region = sources_mod.getSourceRegion(source);
 
     // The ungrouped region is upscaled
@@ -215,7 +215,7 @@ pub fn GroupDest(comptime NestedDest: type, comptime P: comptime_int, comptime Q
 
 /// Group a destination expression, treating PxQ blocks as single output pixels.
 /// The input region is downscaled by P horizontally and Q vertically.
-pub fn GroupOut(comptime P: comptime_int, comptime Q: comptime_int, dest: anytype) GroupDest(@TypeOf(dest), P, Q) {
+pub fn groupDest(comptime P: comptime_int, comptime Q: comptime_int, dest: anytype) GroupDest(@TypeOf(dest), P, Q) {
     const nested_region = sources_mod.getSourceRegion(dest);
 
     // The grouped region is downscaled
@@ -294,8 +294,8 @@ pub fn GroupAccessor(comptime SrcType: type, comptime VecT: type, comptime P: co
 
         /// Get a specific pixel within the group at offset (dx, dy)
         pub inline fn getPixel(self: Self, dx: i32, dy: i32, px: usize, py: usize) VecT {
-            const group = self.getAt(dx, dy);
-            return group[py * P + px];
+            const grouped = self.getAt(dx, dy);
+            return grouped[py * P + px];
         }
     };
 }

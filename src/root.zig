@@ -11,16 +11,16 @@ const std = @import("std");
 // MARK: Module Imports
 // ============================================================================
 
-const region = @import("region.zig");
-const padding = @import("padding.zig");
-const sources = @import("sources.zig");
-const translate = @import("translate.zig");
-const zip = @import("zip.zig");
-const group = @import("group.zig");
-const stats = @import("stats.zig");
-const interpolation = @import("interpolation.zig");
-const cache = @import("cache.zig");
-const loop = @import("loop.zig");
+const region_mod = @import("region.zig");
+const padding_mod = @import("padding.zig");
+const sources_mod = @import("sources.zig");
+const translate_mod = @import("translate.zig");
+const zip_mod = @import("zip.zig");
+const group_mod = @import("group.zig");
+const stats_mod = @import("stats.zig");
+const interpolation_mod = @import("interpolation.zig");
+const cache_mod = @import("cache.zig");
+const loop_mod = @import("loop.zig");
 
 // ============================================================================
 // MARK: Re-exported Types and Constants
@@ -39,48 +39,48 @@ pub fn VectorLike(comptime VectorType: type, comptime ScalarType: type) type {
 }
 
 // Region module
-pub const Region = region.Region;
-pub const Margin = region.Margin;
+pub const Region = region_mod.Region;
+pub const Margin = region_mod.Margin;
 
 // Padding module
-pub const ZeroPadding = padding.ZeroPadding;
-pub const RepeatEdgePadding = padding.RepeatEdgePadding;
+pub const ZeroPadding = padding_mod.ZeroPadding;
+pub const RepeatEdgePadding = padding_mod.RepeatEdgePadding;
 
 // Sources module
-pub const In = sources.In;
-pub const InWithPadding = sources.InWithPadding;
-pub const Out = sources.Out;
-pub const InterleavedOut = sources.InterleavedOut;
+pub const makeSource = sources_mod.makeSource;
+pub const makePaddedSource = sources_mod.makePaddedSource;
+pub const makeDest = sources_mod.makeDest;
+pub const makeInterleavedDest = sources_mod.makeInterleavedDest;
 
 // Translate module
-pub const Translate = translate.Translate;
+pub const translate = translate_mod.translate;
 
 // Zip module
-pub const Zip = zip.Zip;
-pub const ZipOut = zip.ZipOut;
-pub const Unzip = zip.Unzip;
+pub const zip = zip_mod.zip;
+pub const zipDest = zip_mod.zipDest;
+pub const unzip = zip_mod.unzip;
 
 // Group module
-pub const Group = group.Group;
-pub const GroupOut = group.GroupOut;
-pub const Ungroup = group.Ungroup;
+pub const group = group_mod.group;
+pub const groupDest = group_mod.groupDest;
+pub const ungroup = group_mod.ungroup;
 
 // Stats module
-pub const Stats = stats.Stats;
-pub const StatsWithCoords = stats.StatsWithCoords;
+pub const stats = stats_mod.stats;
+pub const statsWithCoords = stats_mod.statsWithCoords;
 
 // Interpolation module
-pub const InterpolationMethod = interpolation.InterpolationMethod;
-pub const InterpLoop = interpolation.InterpLoop;
-pub const LoopOptions = loop.LoopOptions;
-pub const DefaultLoopOptions = loop.DefaultLoopOptions;
+pub const InterpolationMethod = interpolation_mod.InterpolationMethod;
+pub const interpLoop = interpolation_mod.interpLoop;
+pub const LoopOptions = loop_mod.LoopOptions;
+pub const DefaultLoopOptions = loop_mod.DefaultLoopOptions;
 
 // Loop module (core processing)
-pub const Loop = loop.Loop;
-pub const Generate = loop.Generate;
-pub const Process = loop.Process;
+pub const loop = loop_mod.loop;
+pub const generate = loop_mod.generate;
+pub const process = loop_mod.process;
 // Cache module
-pub const CachedLoop = cache.CachedLoop;
+pub const cachedLoop = cache_mod.cachedLoop;
 
 // ============================================================================
 // MARK: Math Functions

@@ -19,8 +19,8 @@ test "Cache: All loop result fit in cache" {
 
     var output_data = [_]f32{0} ** 8;
 
-    const source = zpp.In(f32, &input_data, region.width, region);
-    const destination = zpp.Out(f32, &output_data, region.width, region);
+    const source = zpp.makeSource(f32, &input_data, region.width, region);
+    const destination = zpp.makeDest(f32, &output_data, region.width, region);
 
     const stat_kernel = struct {
         const Context = struct {
@@ -33,7 +33,7 @@ test "Cache: All loop result fit in cache" {
     };
     var stats_ctx = stat_kernel.Context{};
 
-    const stats_dest = zpp.Stats(f32x4, &stats_ctx, region, stat_kernel.accumulate);
+    const stats_dest = zpp.stats(f32x4, &stats_ctx, region, stat_kernel.accumulate);
 
     const kernel = struct {
         const Context = struct {
@@ -47,11 +47,11 @@ test "Cache: All loop result fit in cache" {
     };
 
     var ctx = kernel.Context{};
-    const result = try zpp.CachedLoop(f32x4, .{}, 2, source, &ctx, kernel.process, std.testing.allocator);
+    const result = try zpp.cachedLoop(f32x4, .{}, 2, source, &ctx, kernel.process, std.testing.allocator);
     defer result.deinit();
-    const zipped_in = zpp.Zip(.{ result, result });
-    const zipped_dest = zpp.ZipOut(.{ destination, stats_dest });
-    zpp.Process(zipped_in, zipped_dest);
+    const zipped_in = zpp.zip(.{ result, result });
+    const zipped_dest = zpp.zipDest(.{ destination, stats_dest });
+    zpp.process(zipped_in, zipped_dest);
 
     const expected_data = [_]f32{
         10, 20, 30, 40,
@@ -77,8 +77,8 @@ test "Cache: Smaller cache than loop result" {
 
     var output_data = [_]f32{0} ** 8;
 
-    const source = zpp.In(f32, &input_data, region.width, region);
-    const destination = zpp.Out(f32, &output_data, region.width, region);
+    const source = zpp.makeSource(f32, &input_data, region.width, region);
+    const destination = zpp.makeDest(f32, &output_data, region.width, region);
 
     const stat_kernel = struct {
         const Context = struct {
@@ -91,7 +91,7 @@ test "Cache: Smaller cache than loop result" {
     };
     var stats_ctx = stat_kernel.Context{};
 
-    const stats_dest = zpp.Stats(f32x4, &stats_ctx, region, stat_kernel.accumulate);
+    const stats_dest = zpp.stats(f32x4, &stats_ctx, region, stat_kernel.accumulate);
 
     const kernel = struct {
         const Context = struct {
@@ -105,11 +105,11 @@ test "Cache: Smaller cache than loop result" {
     };
 
     var ctx = kernel.Context{};
-    const result = try zpp.CachedLoop(f32x4, .{}, 1, source, &ctx, kernel.process, std.testing.allocator);
+    const result = try zpp.cachedLoop(f32x4, .{}, 1, source, &ctx, kernel.process, std.testing.allocator);
     defer result.deinit();
-    const zipped_in = zpp.Zip(.{ result, result });
-    const zipped_dest = zpp.ZipOut(.{ destination, stats_dest });
-    zpp.Process(zipped_in, zipped_dest);
+    const zipped_in = zpp.zip(.{ result, result });
+    const zipped_dest = zpp.zipDest(.{ destination, stats_dest });
+    zpp.process(zipped_in, zipped_dest);
 
     const expected_data = [_]f32{
         10, 20, 30, 40,

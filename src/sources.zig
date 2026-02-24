@@ -124,7 +124,7 @@ pub fn InputSource(comptime T: type, comptime PaddingPolicy: type) type {
 }
 
 /// Create an input source from data buffer with default RepeatEdgePadding
-pub fn In(comptime T: type, data: []const T, stride: u32, region: Region) InputSource(T, RepeatEdgePadding) {
+pub fn makeSource(comptime T: type, data: []const T, stride: u32, region: Region) InputSource(T, RepeatEdgePadding) {
     return .{
         .data = data,
         .stride = stride,
@@ -133,7 +133,7 @@ pub fn In(comptime T: type, data: []const T, stride: u32, region: Region) InputS
 }
 
 /// Create an input source from data buffer with specified padding policy
-pub fn InWithPadding(
+pub fn makePaddedSource(
     comptime T: type,
     comptime PaddingPolicy: type,
     data: []const T,
@@ -186,7 +186,7 @@ pub fn OutputDest(comptime T: type) type {
 }
 
 /// Create an output destination from data buffer
-pub fn Out(comptime T: type, data: []T, stride: u32, region: Region) OutputDest(T) {
+pub fn makeDest(comptime T: type, data: []T, stride: u32, region: Region) OutputDest(T) {
     return .{
         .data = data,
         .stride = stride,
@@ -254,7 +254,7 @@ pub fn InterleavedOutput(comptime T: type, comptime num_channels: comptime_int) 
 }
 
 /// Create an interleaved multi-channel output destination
-pub fn InterleavedOut(
+pub fn makeInterleavedDest(
     comptime T: type,
     comptime num_channels: comptime_int,
     data: []T,

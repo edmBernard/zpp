@@ -16,11 +16,11 @@ test "Zip: two sources add correctly" {
     th.fillRamp(f32, &input_b, 10, 10);
     var output_data = [_]f32{0} ** 8;
 
-    const source_a = zpp.In(f32, &input_a, region.width, region);
-    const source_b = zpp.In(f32, &input_b, region.width, region);
-    const destination = zpp.Out(f32, &output_data, region.width, region);
+    const source_a = zpp.makeSource(f32, &input_a, region.width, region);
+    const source_b = zpp.makeSource(f32, &input_b, region.width, region);
+    const destination = zpp.makeDest(f32, &output_data, region.width, region);
 
-    const zipped = zpp.Zip(.{ source_a, source_b });
+    const zipped = zpp.zip(.{ source_a, source_b });
 
     const add_kernel = struct {
         fn process(ctx: anytype, in: anytype) f32x4 {
@@ -30,8 +30,8 @@ test "Zip: two sources add correctly" {
         }
     };
 
-    const result = zpp.Loop(f32x4, .{}, zipped, .{}, add_kernel.process);
-    zpp.Process(result, destination);
+    const result = zpp.loop(f32x4, .{}, zipped, .{}, add_kernel.process);
+    zpp.process(result, destination);
 
     // output = input_a + input_b = [1+10, 2+20, 3+30, ..., 8+80]
     const expected_data: [8]f32 = .{
@@ -51,11 +51,11 @@ test "Zip: fill two destination: kernel output is a struct" {
     var output_data_a = [_]f32{0} ** 8;
     var output_data_b = [_]f32{0} ** 8;
 
-    const source = zpp.In(f32, &input_data, region.width, region);
-    const destination_a = zpp.Out(f32, &output_data_a, region.width, region);
-    const destination_b = zpp.Out(f32, &output_data_b, region.width, region);
+    const source = zpp.makeSource(f32, &input_data, region.width, region);
+    const destination_a = zpp.makeDest(f32, &output_data_a, region.width, region);
+    const destination_b = zpp.makeDest(f32, &output_data_b, region.width, region);
 
-    const zipped = zpp.ZipOut(.{ destination_a, destination_b });
+    const zipped = zpp.zipDest(.{ destination_a, destination_b });
 
     const kernel = struct {
         fn process(ctx: anytype, in: anytype) struct { f32x4, f32x4 } {
@@ -65,8 +65,8 @@ test "Zip: fill two destination: kernel output is a struct" {
         }
     };
 
-    const result = zpp.Loop(f32x4, .{}, source, .{}, kernel.process);
-    zpp.Process(result, zipped);
+    const result = zpp.loop(f32x4, .{}, source, .{}, kernel.process);
+    zpp.process(result, zipped);
 
     // output = input_a + input_b = [1+10, 2+20, 3+30, ..., 8+80]
     const expected_data_a = [_]f32{
@@ -91,11 +91,11 @@ test "Zip: fill two destination: kernel output is an array" {
     var output_data_a = [_]f32{0} ** 8;
     var output_data_b = [_]f32{0} ** 8;
 
-    const source = zpp.In(f32, &input_data, region.width, region);
-    const destination_a = zpp.Out(f32, &output_data_a, region.width, region);
-    const destination_b = zpp.Out(f32, &output_data_b, region.width, region);
+    const source = zpp.makeSource(f32, &input_data, region.width, region);
+    const destination_a = zpp.makeDest(f32, &output_data_a, region.width, region);
+    const destination_b = zpp.makeDest(f32, &output_data_b, region.width, region);
 
-    const zipped = zpp.ZipOut(.{ destination_a, destination_b });
+    const zipped = zpp.zipDest(.{ destination_a, destination_b });
 
     const kernel = struct {
         fn process(ctx: anytype, in: anytype) [2]f32x4 {
@@ -105,8 +105,8 @@ test "Zip: fill two destination: kernel output is an array" {
         }
     };
 
-    const result = zpp.Loop(f32x4, .{}, source, .{}, kernel.process);
-    zpp.Process(result, zipped);
+    const result = zpp.loop(f32x4, .{}, source, .{}, kernel.process);
+    zpp.process(result, zipped);
 
     // output = input_a + input_b = [1+10, 2+20, 3+30, ..., 8+80]
     const expected_data_a = [_]f32{
@@ -132,11 +132,11 @@ test "Zip: Can chained several zip kernels together" {
     var output_data_a = [_]f32{0} ** 8;
     var output_data_b = [_]f32{0} ** 8;
 
-    const source = zpp.In(f32, &input_data, region.width, region);
-    const destination_a = zpp.Out(f32, &output_data_a, region.width, region);
-    const destination_b = zpp.Out(f32, &output_data_b, region.width, region);
+    const source = zpp.makeSource(f32, &input_data, region.width, region);
+    const destination_a = zpp.makeDest(f32, &output_data_a, region.width, region);
+    const destination_b = zpp.makeDest(f32, &output_data_b, region.width, region);
 
-    const zipped = zpp.ZipOut(.{ destination_a, destination_b });
+    const zipped = zpp.zipDest(.{ destination_a, destination_b });
 
     const kernel_1 = struct {
         fn process(ctx: anytype, in: anytype) struct { f32x4, f32x4, f32x4 } {
@@ -153,9 +153,9 @@ test "Zip: Can chained several zip kernels together" {
         }
     };
 
-    const result_kernel_1 = zpp.Loop(f32x4, .{}, source, .{}, kernel_1.process);
-    const result_kernel_2 = zpp.Loop(f32x4, .{}, result_kernel_1, .{}, kernel_2.process);
-    zpp.Process(result_kernel_2, zipped);
+    const result_kernel_1 = zpp.loop(f32x4, .{}, source, .{}, kernel_1.process);
+    const result_kernel_2 = zpp.loop(f32x4, .{}, result_kernel_1, .{}, kernel_2.process);
+    zpp.process(result_kernel_2, zipped);
 
     // output = input_a + input_b = [1+10, 2+20, 3+30, ..., 8+80]
     const expected_data_a = [_]f32{
@@ -181,8 +181,8 @@ test "Zip: Can zip destination and Stats together" {
 
     var output_data = [_]f32{0} ** 8;
 
-    const source = zpp.In(f32, &input_data, region.width, region);
-    const destination = zpp.Out(f32, &output_data, region.width, region);
+    const source = zpp.makeSource(f32, &input_data, region.width, region);
+    const destination = zpp.makeDest(f32, &output_data, region.width, region);
 
     const stat_kernel = struct {
         const Context = struct {
@@ -195,7 +195,7 @@ test "Zip: Can zip destination and Stats together" {
     };
     var stats_ctx = stat_kernel.Context{};
 
-    const stats_dest = zpp.Stats(f32x4, &stats_ctx, region, stat_kernel.accumulate);
+    const stats_dest = zpp.stats(f32x4, &stats_ctx, region, stat_kernel.accumulate);
 
     const kernel = struct {
         fn process(ctx: anytype, in: anytype) f32x4 {
@@ -204,10 +204,10 @@ test "Zip: Can zip destination and Stats together" {
         }
     };
 
-    const result = zpp.Loop(f32x4, .{}, source, .{}, kernel.process);
-    const zipped_in = zpp.Zip(.{ result, result });
-    const zipped_dest = zpp.ZipOut(.{ destination, stats_dest });
-    zpp.Process(zipped_in, zipped_dest);
+    const result = zpp.loop(f32x4, .{}, source, .{}, kernel.process);
+    const zipped_in = zpp.zip(.{ result, result });
+    const zipped_dest = zpp.zipDest(.{ destination, stats_dest });
+    zpp.process(zipped_in, zipped_dest);
 
     const expected_data = [_]f32{
         10, 20, 30, 40,
@@ -229,8 +229,8 @@ test "Zip: Can zip destination and Stats together version 2" {
 
     var output_data = [_]f32{0} ** 8;
 
-    const source = zpp.In(f32, &input_data, region.width, region);
-    const destination = zpp.Out(f32, &output_data, region.width, region);
+    const source = zpp.makeSource(f32, &input_data, region.width, region);
+    const destination = zpp.makeDest(f32, &output_data, region.width, region);
 
     const stat_kernel = struct {
         const Context = struct {
@@ -243,7 +243,7 @@ test "Zip: Can zip destination and Stats together version 2" {
     };
     var stats_ctx = stat_kernel.Context{};
 
-    const stats_dest = zpp.Stats(f32x4, &stats_ctx, region, stat_kernel.accumulate);
+    const stats_dest = zpp.stats(f32x4, &stats_ctx, region, stat_kernel.accumulate);
 
     const kernel = struct {
         fn process(ctx: anytype, in: anytype) f32x4 {
@@ -252,10 +252,10 @@ test "Zip: Can zip destination and Stats together version 2" {
         }
     };
 
-    const result = zpp.Loop(f32x4, .{}, source, .{}, kernel.process);
-    const zipped_in = zpp.Zip(.{ result, source });
-    const zipped_dest = zpp.ZipOut(.{ destination, stats_dest });
-    zpp.Process(zipped_in, zipped_dest);
+    const result = zpp.loop(f32x4, .{}, source, .{}, kernel.process);
+    const zipped_in = zpp.zip(.{ result, source });
+    const zipped_dest = zpp.zipDest(.{ destination, stats_dest });
+    zpp.process(zipped_in, zipped_dest);
 
     const expected_data = [_]f32{
         10, 20, 30, 40,
@@ -276,15 +276,15 @@ test "Zip: Unzip split source correctly" {
     th.fillRamp(f32, &input_b, 10, 10);
     var output_data = [_]f32{0} ** 8;
 
-    const source_a = zpp.In(f32, &input_a, region.width, region);
-    const source_b = zpp.In(f32, &input_b, region.width, region);
-    const destination = zpp.Out(f32, &output_data, region.width, region);
+    const source_a = zpp.makeSource(f32, &input_a, region.width, region);
+    const source_b = zpp.makeSource(f32, &input_b, region.width, region);
+    const destination = zpp.makeDest(f32, &output_data, region.width, region);
 
-    const zipped = zpp.Zip(.{ source_a, source_b });
+    const zipped = zpp.zip(.{ source_a, source_b });
 
-    const a, _ = zpp.Unzip(zipped);
+    const a, _ = zpp.unzip(zipped);
 
-    zpp.Process(a, destination);
+    zpp.process(a, destination);
 
     const expected_data = [_]f32{
         1, 2, 3, 4,
@@ -303,13 +303,13 @@ test "Zip: Unzip split source correctly and process" {
     th.fillRamp(f32, &input_b, 10, 10);
     var output_data = [_]f32{0} ** 8;
 
-    const source_a = zpp.In(f32, &input_a, region.width, region);
-    const source_b = zpp.In(f32, &input_b, region.width, region);
-    const destination = zpp.Out(f32, &output_data, region.width, region);
+    const source_a = zpp.makeSource(f32, &input_a, region.width, region);
+    const source_b = zpp.makeSource(f32, &input_b, region.width, region);
+    const destination = zpp.makeDest(f32, &output_data, region.width, region);
 
-    const zipped = zpp.Zip(.{ source_a, source_b });
+    const zipped = zpp.zip(.{ source_a, source_b });
 
-    const a, _ = zpp.Unzip(zipped);
+    const a, _ = zpp.unzip(zipped);
 
     const kernel = struct {
         fn process(ctx: anytype, in: anytype) f32x4 {
@@ -318,8 +318,8 @@ test "Zip: Unzip split source correctly and process" {
         }
     };
 
-    const result = zpp.Loop(f32x4, .{}, a, .{}, kernel.process);
-    zpp.Process(result, destination);
+    const result = zpp.loop(f32x4, .{}, a, .{}, kernel.process);
+    zpp.process(result, destination);
 
     const expected_data = [_]f32{
         2,  4,  6,  8,
@@ -336,10 +336,10 @@ test "Zip: unzip preserves region dimensions" {
     var data_a = [_]f32{0} ** 32;
     var data_b = [_]f32{0} ** 32;
 
-    const source_a = zpp.In(f32, &data_a, region_a.width, region_a);
-    const source_b = zpp.In(f32, &data_b, region_b.width, region_b);
+    const source_a = zpp.makeSource(f32, &data_a, region_a.width, region_a);
+    const source_b = zpp.makeSource(f32, &data_b, region_b.width, region_b);
 
-    const zipped = zpp.Zip(.{ source_a, source_b });
+    const zipped = zpp.zip(.{ source_a, source_b });
 
     // Zipped region should be intersection of both regions
     const zipped_region = zipped.region;
@@ -349,7 +349,7 @@ test "Zip: unzip preserves region dimensions" {
     try std.testing.expectEqual(@as(u32, 3), zipped_region.height);
 
     // Unzip and verify each source preserves the zipped region
-    const unzipped = zpp.Unzip(zipped);
+    const unzipped = zpp.unzip(zipped);
     const unzipped_0_region = unzipped[0].getRegion();
     const unzipped_1_region = unzipped[1].getRegion();
 

@@ -16,7 +16,7 @@ test "Generator: produce correct coordinates type: smaller region than batch siz
             const ScalarType = @typeInfo(OutputType).vector.child;
 
             var output: [4]ScalarType = .{ 0, 0, 0, 0 };
-            const destination = zpp.Out(ScalarType, &output, region.width, region);
+            const destination = zpp.makeDest(ScalarType, &output, region.width, region);
 
             const processing_kernel = struct {
                 fn process(ctx: anytype, x: anytype, y: anytype) OutputType {
@@ -29,8 +29,8 @@ test "Generator: produce correct coordinates type: smaller region than batch siz
                 }
             };
 
-            const result = zpp.Generate(CoordType, .{}, processing_kernel.process);
-            zpp.Process(result, destination);
+            const result = zpp.generate(CoordType, .{}, processing_kernel.process);
+            zpp.process(result, destination);
 
             try std.testing.expectEqual(@as(ScalarType, 0.0), output[0]);
             try std.testing.expectEqual(@as(ScalarType, 1.0), output[1]);
@@ -48,7 +48,7 @@ test "Generator: produce correct coordinates type: larger region than batch size
             const ScalarType = @typeInfo(OutputType).vector.child;
 
             var output = [_]ScalarType{0} ** 16;
-            const destination = zpp.Out(ScalarType, &output, region.width, region);
+            const destination = zpp.makeDest(ScalarType, &output, region.width, region);
 
             const processing_kernel = struct {
                 fn process(ctx: anytype, x: anytype, y: anytype) OutputType {
@@ -61,8 +61,8 @@ test "Generator: produce correct coordinates type: larger region than batch size
                 }
             };
 
-            const result = zpp.Generate(CoordType, .{}, processing_kernel.process);
-            zpp.Process(result, destination);
+            const result = zpp.generate(CoordType, .{}, processing_kernel.process);
+            zpp.process(result, destination);
 
             var expectedOutput = [_]ScalarType{0} ** 16;
             for (0..region.height) |y| {
@@ -84,7 +84,7 @@ test "Generator: produce correct coordinates type: region width not multiple of 
             const ScalarType = @typeInfo(OutputType).vector.child;
 
             var output = [_]ScalarType{0} ** 20;
-            const destination = zpp.Out(ScalarType, &output, region.width, region);
+            const destination = zpp.makeDest(ScalarType, &output, region.width, region);
 
             const processing_kernel = struct {
                 fn process(ctx: anytype, x: anytype, y: anytype) OutputType {
@@ -97,8 +97,8 @@ test "Generator: produce correct coordinates type: region width not multiple of 
                 }
             };
 
-            const result = zpp.Generate(CoordType, .{}, processing_kernel.process);
-            zpp.Process(result, destination);
+            const result = zpp.generate(CoordType, .{}, processing_kernel.process);
+            zpp.process(result, destination);
 
             var expectedOutput = [_]ScalarType{0} ** 20;
             for (0..region.height) |y| {
@@ -124,7 +124,7 @@ test "Generator: Only fill requested region: Same global size, different regions
             const ScalarType = @typeInfo(OutputType).vector.child;
 
             var output_data = [_]ScalarType{0} ** (image_width * image_height);
-            const destination = zpp.Out(ScalarType, &output_data, output_stride, output_region);
+            const destination = zpp.makeDest(ScalarType, &output_data, output_stride, output_region);
 
             const processing_kernel = struct {
                 fn process(ctx: anytype, x: anytype, y: anytype) OutputType {
@@ -136,8 +136,8 @@ test "Generator: Only fill requested region: Same global size, different regions
                     return th.vectorCast(OutputType, x) + th.vectorCast(OutputType, y) * th.splatWithCast(OutputType, 10);
                 }
             };
-            const result = zpp.Generate(CoordType, .{}, processing_kernel.process);
-            zpp.Process(result, destination);
+            const result = zpp.generate(CoordType, .{}, processing_kernel.process);
+            zpp.process(result, destination);
 
             const expected_data: [45]ScalarType = .{
                 0, 0, 0,  0,  0,  0,  0,  0, 0,

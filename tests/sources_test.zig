@@ -20,13 +20,13 @@ test "Source: Naked In source reads correct values" {
         const ScalarType = @typeInfo(DataType).vector.child;
 
         var output_data = [_]ScalarType{0} ** 4;
-        const destination = zpp.Out(ScalarType, &output_data, region.width, region);
+        const destination = zpp.makeDest(ScalarType, &output_data, region.width, region);
 
         var source_data = [_]ScalarType{0} ** 4;
         th.fillRamp(ScalarType, &source_data, 1, 3);
-        const source = zpp.In(ScalarType, &source_data, region.width, region);
+        const source = zpp.makeSource(ScalarType, &source_data, region.width, region);
 
-        zpp.Process(source, destination);
+        zpp.process(source, destination);
 
         try std.testing.expectEqual(source_data, output_data);
     }
@@ -40,13 +40,13 @@ test "Source: Naked In source reads correct values: larger and odd region" {
         const ScalarType = @typeInfo(DataType).vector.child;
 
         var output_data = [_]ScalarType{0} ** 15;
-        const destination = zpp.Out(ScalarType, &output_data, region.width, region);
+        const destination = zpp.makeDest(ScalarType, &output_data, region.width, region);
 
         var source_data = [_]ScalarType{0} ** 15;
         th.fillRamp(ScalarType, &source_data, 1, 3);
-        const source = zpp.In(ScalarType, &source_data, region.width, region);
+        const source = zpp.makeSource(ScalarType, &source_data, region.width, region);
 
-        zpp.Process(source, destination);
+        zpp.process(source, destination);
 
         try std.testing.expectEqual(source_data, output_data);
     }
@@ -64,12 +64,12 @@ test "Source: Only fill requested region: Same global size, different regions" {
 
         var source_data = [_]ScalarType{0} ** 45;
         th.fillRamp(ScalarType, &source_data, 1, 1);
-        const source = zpp.In(ScalarType, &source_data, input_region.width, input_region);
+        const source = zpp.makeSource(ScalarType, &source_data, input_region.width, input_region);
 
         var output_data = [_]ScalarType{0} ** 45;
-        const destination = zpp.Out(ScalarType, &output_data, output_stride, output_region);
+        const destination = zpp.makeDest(ScalarType, &output_data, output_stride, output_region);
 
-        zpp.Process(source, destination);
+        zpp.process(source, destination);
 
         const expected_data: [45]ScalarType = .{
             0, 0, 0,  0,  0,  0,  0,  0, 0,
@@ -98,12 +98,12 @@ test "Source: Only fill requested region: Same global size, different regions, p
 
         var source_data = [_]ScalarType{0} ** (image_width * image_height);
         th.fillRamp(ScalarType, &source_data, 1, 1);
-        const source = zpp.In(ScalarType, &source_data, input_stride, input_region);
+        const source = zpp.makeSource(ScalarType, &source_data, input_stride, input_region);
 
         var output_data = [_]ScalarType{0} ** (image_width * image_height);
-        const destination = zpp.Out(ScalarType, &output_data, output_stride, output_region);
+        const destination = zpp.makeDest(ScalarType, &output_data, output_stride, output_region);
 
-        zpp.Process(source, destination);
+        zpp.process(source, destination);
 
         const expected_data: [45]ScalarType = .{
             0, 0, 0,  0,  0,  0,  0,  0, 0,
@@ -125,7 +125,7 @@ test "Source: readVec in-bounds loads correct values across types" {
 
         var input_data: [16]ScalarType = undefined;
         th.fillRamp(ScalarType, &input_data, 1, 1);
-        const source = zpp.In(ScalarType, &input_data, region.width, region);
+        const source = zpp.makeSource(ScalarType, &input_data, region.width, region);
 
         // In-bounds read at (0, 0) -> should load [1, 2, 3, 4]
         const vec1 = source.readVec(VecType, 0, 0);
@@ -151,7 +151,7 @@ test "Source: readVec out-of-bounds with RepeatEdgePadding across types" {
         // Input: [[1,2,3,4], [5,6,7,8]]
         var input_data: [8]ScalarType = undefined;
         th.fillRamp(ScalarType, &input_data, 1, 1);
-        const source = zpp.In(ScalarType, &input_data, region.width, region);
+        const source = zpp.makeSource(ScalarType, &input_data, region.width, region);
 
         // Read starting at x=-1 (left edge clamp) -> [1, 1, 2, 3]
         const vec1 = source.readVec(VecType, -1, 0);
@@ -181,7 +181,7 @@ test "Source: readVec out-of-bounds with ZeroPadding across types" {
         // Input: [[1,2,3,4], [5,6,7,8]]
         var input_data: [8]ScalarType = undefined;
         th.fillRamp(ScalarType, &input_data, 1, 1);
-        const source = zpp.InWithPadding(ScalarType, zpp.ZeroPadding, &input_data, region.width, region);
+        const source = zpp.makePaddedSource(ScalarType, zpp.ZeroPadding, &input_data, region.width, region);
 
         // Read starting at x=-1 (left edge zero) -> [0, 1, 2, 3]
         const vec1 = source.readVec(VecType, -1, 0);

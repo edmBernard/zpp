@@ -15,8 +15,8 @@ test "InterpLoop Nearest: identity transform preserves values" {
     th.fillRamp(f32, &input_data, 1, 1);
     var output_data = [_]f32{0} ** 8;
 
-    const source = zpp.In(f32, &input_data, region.width, region);
-    const destination = zpp.Out(f32, &output_data, region.width, region);
+    const source = zpp.makeSource(f32, &input_data, region.width, region);
+    const destination = zpp.makeDest(f32, &output_data, region.width, region);
 
     // Identity transform kernel - sample at same coordinates
     const interp_kernel = struct {
@@ -26,8 +26,8 @@ test "InterpLoop Nearest: identity transform preserves values" {
         }
     };
 
-    const result = zpp.InterpLoop(f32x4, .nearest, source, region, .{}, interp_kernel.process);
-    zpp.Process(result, destination);
+    const result = zpp.interpLoop(f32x4, .nearest, source, region, .{}, interp_kernel.process);
+    zpp.process(result, destination);
 
     // Identity transform should copy input to output
     const expected_data: [8]f32 = .{
@@ -45,8 +45,8 @@ test "InterpLoop Nearest: slightly shifted transform preserves values" {
     th.fillRamp(f32, &input_data, 1, 1);
     var output_data = [_]f32{0} ** 8;
 
-    const source = zpp.In(f32, &input_data, region.width, region);
-    const destination = zpp.Out(f32, &output_data, region.width, region);
+    const source = zpp.makeSource(f32, &input_data, region.width, region);
+    const destination = zpp.makeDest(f32, &output_data, region.width, region);
 
     // Identity transform kernel - sample at same coordinates
     const interp_kernel = struct {
@@ -56,8 +56,8 @@ test "InterpLoop Nearest: slightly shifted transform preserves values" {
         }
     };
 
-    const result = zpp.InterpLoop(f32x4, .nearest, source, region, .{}, interp_kernel.process);
-    zpp.Process(result, destination);
+    const result = zpp.interpLoop(f32x4, .nearest, source, region, .{}, interp_kernel.process);
+    zpp.process(result, destination);
 
     // Identity transform should copy input to output
     const expected_data: [8]f32 = .{
@@ -78,8 +78,8 @@ test "InterpLoop: 2x scale with nearest produces correct duplication" {
 
     var output_data = [_]f32{0} ** 64;
 
-    const source = zpp.In(f32, &input_data, input_region.width, input_region);
-    const destination = zpp.Out(f32, &output_data, output_region.width, output_region);
+    const source = zpp.makeSource(f32, &input_data, input_region.width, input_region);
+    const destination = zpp.makeDest(f32, &output_data, output_region.width, output_region);
 
     // 2x upscale: output coords * 0.5 = input coords
     const scale_kernel = struct {
@@ -90,8 +90,8 @@ test "InterpLoop: 2x scale with nearest produces correct duplication" {
         }
     };
 
-    const result = zpp.InterpLoop(f32x4, .nearest, source, output_region, .{}, scale_kernel.process);
-    zpp.Process(result, destination);
+    const result = zpp.interpLoop(f32x4, .nearest, source, output_region, .{}, scale_kernel.process);
+    zpp.process(result, destination);
 
     const expected_data: [64]f32 = .{
         1.0,  2.0,  2.0,  3.0,  3.0,  4.0,  4.0,  4.0,
@@ -117,8 +117,8 @@ test "InterpLoop: 2x scale with linear produces correct value" {
 
     var output_data = [_]f32{0} ** 64;
 
-    const source = zpp.In(f32, &input_data, input_region.width, input_region);
-    const destination = zpp.Out(f32, &output_data, output_region.width, output_region);
+    const source = zpp.makeSource(f32, &input_data, input_region.width, input_region);
+    const destination = zpp.makeDest(f32, &output_data, output_region.width, output_region);
 
     // 2x upscale: output coords * 0.5 = input coords
     const scale_kernel = struct {
@@ -129,8 +129,8 @@ test "InterpLoop: 2x scale with linear produces correct value" {
         }
     };
 
-    const result = zpp.InterpLoop(f32x4, .linear, source, output_region, .{}, scale_kernel.process);
-    zpp.Process(result, destination);
+    const result = zpp.interpLoop(f32x4, .linear, source, output_region, .{}, scale_kernel.process);
+    zpp.process(result, destination);
 
     const expected_data: [64]f32 = .{
         1.0,  1.5,  2.0,  2.5,  3.0,  3.5,  4.0,  4.0,

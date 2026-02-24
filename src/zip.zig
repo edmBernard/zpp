@@ -125,7 +125,7 @@ pub fn ZipSource(comptime source_count: comptime_int, comptime SourceTypes: [sou
 
 /// Zip any number of source expressions together.
 /// The kernel will receive an array [N]VecT that can be unpacked: `const [a, b, c] = in.get();`
-pub fn Zip(sources: anytype) ZipSource(tupleLen(@TypeOf(sources)), sourceTypesFromTuple(@TypeOf(sources))) {
+pub fn zip(sources: anytype) ZipSource(tupleLen(@TypeOf(sources)), sourceTypesFromTuple(@TypeOf(sources))) {
     const SourcesTuple = @TypeOf(sources);
     const type_info = @typeInfo(SourcesTuple);
 
@@ -180,7 +180,7 @@ pub fn ZipDest(comptime dest_count: comptime_int, comptime DestTypes: [dest_coun
 }
 
 /// Zip any number of destination expressions together.
-pub fn ZipOut(dests: anytype) ZipDest(tupleLen(@TypeOf(dests)), sourceTypesFromTuple(@TypeOf(dests))) {
+pub fn zipDest(dests: anytype) ZipDest(tupleLen(@TypeOf(dests)), sourceTypesFromTuple(@TypeOf(dests))) {
     const DestsTuple = @TypeOf(dests);
     const type_info = @typeInfo(DestsTuple);
 
@@ -262,7 +262,7 @@ fn UnzipResultType(comptime ZippedType: type) type {
 /// Returns a tuple containing the individual sources.
 /// This allows you to process each channel independently after zipping.
 /// Example: `const unzipped = Unzip(zipped); const first = unzipped[0];`
-pub fn Unzip(zipped: anytype) UnzipResultType(@TypeOf(zipped)) {
+pub fn unzip(zipped: anytype) UnzipResultType(@TypeOf(zipped)) {
     const ZippedType = @TypeOf(zipped);
     const source_count = ZippedType.count;
 

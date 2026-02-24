@@ -23,7 +23,7 @@ const Margin = region_mod.Margin;
 /// Options for Loop operations
 pub fn LoopOptions(comptime CoordType: ?type) type {
     return struct {
-        need_coordinates: ?type = CoordType,
+        coord_type: ?type = CoordType,
         margin: Margin = .{},
     };
 }
@@ -49,7 +49,7 @@ pub fn isGroupSourceType(comptime T: type) bool {
 /// If T is a vector, returns T.
 /// If T is an array of vectors (e.g., [3]@Vector(4, f32)), returns the vector type.
 /// If T is a tuple of vectors (e.g., struct{f32x4, f32x4}), returns the first vector type.
-pub fn innerVectorType(comptime T: type) type {
+pub fn InnerVectorType(comptime T: type) type {
     const type_info = @typeInfo(T);
     if (type_info == .vector) {
         return T;
@@ -132,7 +132,7 @@ pub fn GeneratorResult(
     };
 }
 
-inline fn castScalarCoordToVector(comptime CoordT: type, value: i32) CoordT {
+pub inline fn castScalarCoordToVector(comptime CoordT: type, value: i32) CoordT {
     switch (@typeInfo(CoordT).vector.child) {
         f32 => {
             return @as(CoordT, @splat(@floatFromInt(value)));
@@ -147,7 +147,7 @@ inline fn castScalarCoordToVector(comptime CoordT: type, value: i32) CoordT {
 /// Create a generator (produces values from coordinates, no input)
 /// Supports both single-channel (VecT) and multi-channel ([N]VecT) output.
 /// The vector length is inferred from the VecT type.
-pub fn Generate(
+pub fn generate(
     comptime VecT: type,
     context: anytype,
     comptime process_fn: anytype,
@@ -226,7 +226,7 @@ pub fn LoopResult(
     comptime process_fn: anytype,
     comptime opts: DefaultLoopOptions,
 ) type {
-    const has_coords = opts.need_coordinates != null;
+    const has_coords = opts.coord_type != null;
     const is_zip_source = isZipSourceType(SourceType);
     const is_group_source = isGroupSourceType(SourceType);
 
@@ -283,7 +283,7 @@ pub fn LoopResult(
             };
 
             if (comptime has_coords) {
-                const CoordT = opts.need_coordinates.?;
+                const CoordT = opts.coord_type.?;
                 const CoordElemT = @typeInfo(CoordT).vector.child;
                 const iota = std.simd.iota(CoordElemT, vec_len);
                 const x_coords: CoordT = iota + castScalarCoordToVector(CoordT, x);
@@ -308,7 +308,7 @@ pub fn LoopResult(
             };
 
             if (comptime has_coords) {
-                const CoordT = opts.need_coordinates.?;
+                const CoordT = opts.coord_type.?;
                 const CoordElemT = @typeInfo(CoordT).vector.child;
                 const iota = std.simd.iota(CoordElemT, vec_len);
                 const x_coords: CoordT = iota + castScalarCoordToVector(CoordT, x);
@@ -352,7 +352,7 @@ pub fn LoopResult(
 }
 
 /// Create a lazy processing loop
-pub fn Loop(
+pub fn loop(
     comptime VecT: type,
     comptime opts: DefaultLoopOptions,
     source: anytype,
@@ -390,7 +390,7 @@ const getSourceVecLen = zip_mod.getSourceVecLen;
 /// splits each row into left-edge / interior / right-edge strips. The interior
 /// strip uses unchecked reads (no bounds checking), which eliminates per-vector
 /// bounds comparisons for the majority of pixels.
-pub fn Process(source: anytype, dest: anytype) void {
+pub fn process(source: anytype, dest: anytype) void {
     const region = dest.region;
     const SourceType = @TypeOf(source);
     const DestType = @TypeOf(dest);

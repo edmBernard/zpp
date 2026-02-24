@@ -81,7 +81,7 @@ pub fn main() !void {
     const region = zpp.Region{ .x = 0, .y = 0, .width = width, .height = height };
 
     // Create RGB interleaved output destination (3 channels)
-    const dest = zpp.InterleavedOut(u8, 3, data, width, region);
+    const dest = zpp.makeInterleavedDest(u8, 3, data, width, region);
 
     // Define kernel context and process function
     const GradientKernel = struct {
@@ -104,8 +104,8 @@ pub fn main() !void {
     };
 
     // Generate and process
-    const generator = zpp.Generate(f32v, ctx, GradientKernel.process);
-    zpp.Process(generator, dest);
+    const generator = zpp.generate(f32v, ctx, GradientKernel.process);
+    zpp.process(generator, dest);
 
     // 'data' now contains the RGB image
 }
@@ -146,20 +146,20 @@ const v_margin = zpp.Margin.vertical(1);   // 1 pixel vertically only
 
 ```zig
 // Basic input (uses edge-repeat padding by default)
-const source = zpp.In(f32, &input_data, stride, region);
+const source = zpp.makeSource(f32, &input_data, stride, region);
 
 // Input with explicit zero padding
-const source_zero = zpp.InWithPadding(f32, zpp.ZeroPadding, &input_data, stride, region);
+const source_zero = zpp.makePaddedSource(f32, zpp.ZeroPadding, &input_data, stride, region);
 ```
 
 **Output destinations** write processed results:
 
 ```zig
 // Single-channel output
-const dest = zpp.Out(f32, &output_data, stride, region);
+const dest = zpp.makeDest(f32, &output_data, stride, region);
 
 // RGB interleaved output (3 channels, automatically converts float [0,1] to u8 [0,255])
-const rgb_dest = zpp.InterleavedOut(u8, 3, &rgb_data, width, region);
+const rgb_dest = zpp.makeInterleavedDest(u8, 3, &rgb_data, width, region);
 ```
 
 ### Kernels
@@ -173,11 +173,11 @@ const MyKernel = struct {
         offset: f32v,
     };
 
-    // For Loop: receives input accessor
+    // For loop: receives input accessor
     fn process(ctx: Context, in: anytype) f32v {
         return in.get() * ctx.scale + ctx.offset;
     }
-    // For Generate: receives x, y coordinates
+    // For generate: receives x, y coordinates
     fn generateProcess(ctx: Context, x: f32v, y: f32v) f32v {
         return x / ctx.scale + y / ctx.scale;
     }
@@ -186,25 +186,25 @@ const MyKernel = struct {
 
 ### Processing Primitives
 
-**Generate** creates values from coordinates (no input source):
+**generate** creates values from coordinates (no input source):
 
 ```zig
-const generator = zpp.Generate(f32v, context, processFunc);
+const generator = zpp.generate(f32v, context, processFunc);
 ```
 
-**Loop** transforms input data through a kernel:
+**loop** transforms input data through a kernel:
 
 ```zig
-const result = zpp.Loop(f32v, .{}, source, context, processFunc);
+const result = zpp.loop(f32v, .{}, source, context, processFunc);
 
 // With margin for neighborhood access
-const result = zpp.Loop(f32v, .{ .margin = zpp.Margin.uniform(1) }, source, context, kernelFunc);
+const result = zpp.loop(f32v, .{ .margin = zpp.Margin.uniform(1) }, source, context, kernelFunc);
 ```
 
-**Process** executes the pipeline and writes to destination:
+**process** executes the pipeline and writes to destination:
 
 ```zig
-zpp.Process(result, destination);
+zpp.process(result, destination);
 ```
 
 ### Expression Trees
@@ -213,12 +213,12 @@ One of ZPP's most powerful features is lazy evaluation through expression trees.
 
 ```zig
 // Chain multiple operations: source -> blur -> sharpen -> gamma
-const step1 = zpp.Loop(f32v, .{ .margin = zpp.Margin.uniform(1) }, source, blur_ctx, blurKernel);
-const step2 = zpp.Loop(f32v, .{ .margin = zpp.Margin.uniform(1) }, step1, sharpen_ctx, sharpenKernel);
-const step3 = zpp.Loop(f32v, .{}, step2, gamma_ctx, gammaKernel);
+const step1 = zpp.loop(f32v, .{ .margin = zpp.Margin.uniform(1) }, source, blur_ctx, blurKernel);
+const step2 = zpp.loop(f32v, .{ .margin = zpp.Margin.uniform(1) }, step1, sharpen_ctx, sharpenKernel);
+const step3 = zpp.loop(f32v, .{}, step2, gamma_ctx, gammaKernel);
 
 // Only now is computation triggered - all stages fuse together
-zpp.Process(step3, destination);
+zpp.process(step3, destination);
 ```
 
 ### Translation
@@ -227,17 +227,17 @@ For integer pixel offsets (shifting without interpolation):
 
 ```zig
 // Shift source 10 pixels right and 5 pixels down
-const shifted = zpp.Translate(source, 10, 5);
-zpp.Process(shifted, dest);
+const shifted = zpp.translate(source, 10, 5);
+zpp.process(shifted, dest);
 
-// Blend two shifted copies via Zip
-const left  = zpp.Translate(source, -5, 0);
-const right = zpp.Translate(source,  5, 0);
-const zipped = zpp.Zip(.{left, right});
-const blended = zpp.Loop(f32v, .{}, zipped, blend_ctx, blendKernel);
+// Blend two shifted copies via zip
+const left  = zpp.translate(source, -5, 0);
+const right = zpp.translate(source,  5, 0);
+const zipped = zpp.zip(.{left, right});
+const blended = zpp.loop(f32v, .{}, zipped, blend_ctx, blendKernel);
 ```
 
-`Translate` preserves contiguous SIMD loads (unlike `InterpLoop` with `.nearest`) and composes naturally in expression trees.
+`translate` preserves contiguous SIMD loads (unlike `interpLoop` with `.nearest`) and composes naturally in expression trees.
 
 ### Interpolated Sampling
 
@@ -253,7 +253,7 @@ const ResizeKernel = struct {
     }
 };
 
-const resized = zpp.InterpLoop(
+const resized = zpp.interpLoop(
     f32v,
     .linear,        // Interpolation method: .nearest, .linear, or .cubic
     source,
@@ -270,14 +270,14 @@ const resized = zpp.InterpLoop(
 | Module | Description |
 |--------|-------------|
 | `Region`, `Margin` | Rectangular areas and neighborhood specification |
-| `In`, `Out`, `InterleavedOut` | Input/output buffer wrappers |
-| `Generate`, `Loop`, `Process` | Core processing primitives |
-| `InterpLoop` | Interpolated sampling for geometric transforms |
-| `Translate` | Zero-cost integer pixel offset (shift without interpolation) |
-| `Zip`, `Unzip` | Combine/split multiple sources |
-| `Group`, `Ungroup` | Block-based operations |
-| `Stats`, `StatsWithCoords` | Statistical accumulation without memory writes |
-| `CachedLoop` | Result caching to avoid recomputation of complex operations |
+| `makeSource`, `makeDest`, `makeInterleavedDest` | Input/output buffer wrappers |
+| `generate`, `loop`, `process` | Core processing primitives |
+| `interpLoop` | Interpolated sampling for geometric transforms |
+| `translate` | Zero-cost integer pixel offset (shift without interpolation) |
+| `zip`, `unzip` | Combine/split multiple sources |
+| `group`, `ungroup` | Block-based operations |
+| `stats`, `statsWithCoords` | Statistical accumulation without memory writes |
+| `cachedLoop` | Result caching to avoid recomputation of complex operations |
 
 ### SIMD Math Functions
 
@@ -311,10 +311,10 @@ The `examples/` directory contains working demonstrations:
 
 | Example | Description | Key Concepts |
 |---------|-------------|--------------|
-| `checkerboard` | Generates a checkerboard pattern | `Generate`, `InterleavedOut`, basic SIMD |
+| `checkerboard` | Generates a checkerboard pattern | `generate`, `makeInterleavedDest`, basic SIMD |
 | `simplex_noise` | Procedural noise texture | SIMD noise implementation, hash functions |
 | `domain_warping` | fBm-based procedural textures | Multiple noise octaves, color mapping |
-| `gradient_filter` | Edge detection pipeline | Expression trees, `InterpLoop`, margins |
+| `gradient_filter` | Edge detection pipeline | Expression trees, `interpLoop`, margins |
 
 Run examples with:
 
@@ -341,30 +341,30 @@ zig build run-gradient-filter
 src/
 ├── root.zig          # Library entry point - re-exports all public API
 ├── region.zig        # Region and Margin types
-├── sources.zig       # Input/Output buffer wrappers (In, Out, InterleavedOut)
-├── translate.zig     # Zero-cost integer translation (Translate)
-├── loop.zig          # Core processing primitives (Loop, Generate, Process)
+├── sources.zig       # Input/Output buffer wrappers (makeSource, makeDest, makeInterleavedDest)
+├── translate.zig     # Zero-cost integer translation (translate)
+├── loop.zig          # Core processing primitives (loop, generate, process)
 ├── math.zig          # SIMD math functions (sin, cos, exp, pow, etc.)
 ├── interpolation.zig # Interpolation methods (nearest, linear, cubic)
 ├── padding.zig       # Padding policies (ZeroPadding, RepeatEdgePadding)
-├── cache.zig         # Row caching for expression trees (RowCache, CachedLoop)
-├── zip.zig           # Zip/Unzip for multiple sources
-├── group.zig         # Group/Ungroup for Bayer patterns
-└── stats.zig         # Statistics accumulation (Stats, StatsWithCoords)
+├── cache.zig         # Row caching for expression trees (RowCache, cachedLoop)
+├── zip.zig           # zip/unzip for multiple sources
+├── group.zig         # group/ungroup for Bayer patterns
+└── stats.zig         # Statistics accumulation (stats, statsWithCoords)
 tests/
 ├── root.zig              # Test entry point - imports all test modules
 ├── test_helpers.zig      # Shared test utilities (fillRamp, vectorCast, etc.)
 ├── region_test.zig       # Region and Margin tests
 ├── sources_test.zig      # Input/Output source tests
 ├── translate_test.zig    # Translation tests
-├── loop_test.zig         # Loop processing tests
-├── generate_test.zig     # Generate processing tests
+├── loop_test.zig         # loop processing tests
+├── generate_test.zig     # generate processing tests
 ├── math_test.zig         # SIMD math function tests
 ├── interpolation_test.zig # Interpolation tests
 ├── padding_test.zig      # Padding policy tests
 ├── cache_test.zig        # Row caching tests
-├── zip_test.zig          # Zip/Unzip tests
-├── group_test.zig        # Group/Ungroup tests
+├── zip_test.zig          # zip/unzip tests
+├── group_test.zig        # group/ungroup tests
 ├── stats_test.zig        # Statistics tests
 └── integration_test.zig  # Cross-module integration tests
 ```

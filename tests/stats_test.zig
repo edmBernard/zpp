@@ -18,7 +18,7 @@ test "Stats destination: remainder handling with non-aligned width" {
 
     var input_data: [5]f32 = .{ 1.0, 2.0, 3.0, 4.0, 5.0 };
 
-    const source = zpp.In(f32, &input_data, region.width, region);
+    const source = zpp.makeSource(f32, &input_data, region.width, region);
 
     const id_kernel = struct {
         const Context = struct {};
@@ -45,9 +45,9 @@ test "Stats destination: remainder handling with non-aligned width" {
     };
 
     var stats_ctx = sum_kernel.Context{};
-    const loop_result = zpp.Loop(f32x4, .{}, source, id_kernel.Context{}, id_kernel.process);
-    const stats_dest = zpp.Stats(f32x4, &stats_ctx, region, sum_kernel.accumulate);
-    zpp.Process(loop_result, stats_dest);
+    const loop_result = zpp.loop(f32x4, .{}, source, id_kernel.Context{}, id_kernel.process);
+    const stats_dest = zpp.stats(f32x4, &stats_ctx, region, sum_kernel.accumulate);
+    zpp.process(loop_result, stats_dest);
 
     // Sum should be 1+2+3+4+5 = 15
     // Count should be 5 (not 8 which would happen if we counted all 4 lanes twice)
@@ -62,7 +62,7 @@ test "Stats destination: sum accumulation with aligned width" {
 
     var input_data: [8]f32 = .{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0 };
 
-    const source = zpp.In(f32, &input_data, region.width, region);
+    const source = zpp.makeSource(f32, &input_data, region.width, region);
 
     const id_kernel = struct {
         const Context = struct {};
@@ -85,9 +85,9 @@ test "Stats destination: sum accumulation with aligned width" {
     };
 
     var stats_ctx = sum_kernel.Context{};
-    const loop_result = zpp.Loop(f32x4, .{}, source, id_kernel.Context{}, id_kernel.process);
-    const stats_dest = zpp.Stats(f32x4, &stats_ctx, region, sum_kernel.accumulate);
-    zpp.Process(loop_result, stats_dest);
+    const loop_result = zpp.loop(f32x4, .{}, source, id_kernel.Context{}, id_kernel.process);
+    const stats_dest = zpp.stats(f32x4, &stats_ctx, region, sum_kernel.accumulate);
+    zpp.process(loop_result, stats_dest);
 
     // Sum: 1+2+3+4+5+6+7+8 = 36
     try std.testing.expectEqual(@as(f32, 36.0), stats_ctx.sum);
@@ -102,7 +102,7 @@ test "Stats destination: min/max tracking" {
     // Place min and max at specific known positions
     var input_data: [8]f32 = .{ 5.0, 2.0, 8.0, 1.0, 3.0, 7.0, 0.5, 6.0 };
 
-    const source = zpp.In(f32, &input_data, region.width, region);
+    const source = zpp.makeSource(f32, &input_data, region.width, region);
 
     const id_kernel = struct {
         const Context = struct {};
@@ -125,9 +125,9 @@ test "Stats destination: min/max tracking" {
     };
 
     var stats_ctx = minmax_kernel.Context{};
-    const loop_result = zpp.Loop(f32x4, .{}, source, id_kernel.Context{}, id_kernel.process);
-    const stats_dest = zpp.Stats(f32x4, &stats_ctx, region, minmax_kernel.accumulate);
-    zpp.Process(loop_result, stats_dest);
+    const loop_result = zpp.loop(f32x4, .{}, source, id_kernel.Context{}, id_kernel.process);
+    const stats_dest = zpp.stats(f32x4, &stats_ctx, region, minmax_kernel.accumulate);
+    zpp.process(loop_result, stats_dest);
 
     try std.testing.expectEqual(@as(f32, 0.5), stats_ctx.min_val);
     try std.testing.expectEqual(@as(f32, 8.0), stats_ctx.max_val);
@@ -143,7 +143,7 @@ test "Stats destination: compute on the given region" {
     var input_data = [_]f32{0} ** (image_width * image_height);
     th.fillRamp(f32, &input_data, 1, 1);
 
-    const source = zpp.In(f32, &input_data, region_in.width, region_in);
+    const source = zpp.makeSource(f32, &input_data, region_in.width, region_in);
 
     const id_kernel = struct {
         const Context = struct {};
@@ -163,9 +163,9 @@ test "Stats destination: compute on the given region" {
     };
 
     var stats_ctx = stat_kernel.Context{};
-    const loop_result = zpp.Loop(f32x4, .{}, source, id_kernel.Context{}, id_kernel.process);
-    const stats_dest = zpp.Stats(f32x4, &stats_ctx, region_stat, stat_kernel.accumulate);
-    zpp.Process(loop_result, stats_dest);
+    const loop_result = zpp.loop(f32x4, .{}, source, id_kernel.Context{}, id_kernel.process);
+    const stats_dest = zpp.stats(f32x4, &stats_ctx, region_stat, stat_kernel.accumulate);
+    zpp.process(loop_result, stats_dest);
 
     // 0, 0, 0,  0,  0,  0,  0, 0, 0,
     // 0, 0, 12, 13, 14, 15, 0, 0, 0,
@@ -185,7 +185,7 @@ test "Stats destination: compute stat directly from source" {
     var input_data = [_]f32{0} ** (image_width * image_height);
     th.fillRamp(f32, &input_data, 1, 1);
 
-    const source = zpp.In(f32, &input_data, region_in.width, region_in);
+    const source = zpp.makeSource(f32, &input_data, region_in.width, region_in);
 
     const stat_kernel = struct {
         const Context = struct {
@@ -198,8 +198,8 @@ test "Stats destination: compute stat directly from source" {
     };
 
     var stats_ctx = stat_kernel.Context{};
-    const stats_dest = zpp.Stats(f32x4, &stats_ctx, region_stat, stat_kernel.accumulate);
-    zpp.Process(source, stats_dest);
+    const stats_dest = zpp.stats(f32x4, &stats_ctx, region_stat, stat_kernel.accumulate);
+    zpp.process(source, stats_dest);
 
     // 0, 0, 0,  0,  0,  0,  0, 0, 0,
     // 0, 0, 12, 13, 14, 15, 0, 0, 0,

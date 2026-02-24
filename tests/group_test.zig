@@ -20,9 +20,9 @@ test "Group: 2x2 source downscales region correctly" {
         const region: zpp.Region = .{ .x = 0, .y = 0, .width = tc.w, .height = tc.h };
 
         var data = [_]f32{0} ** 128;
-        const source = zpp.In(f32, data[0 .. tc.w * tc.h], region.width, region);
+        const source = zpp.makeSource(f32, data[0 .. tc.w * tc.h], region.width, region);
 
-        const grouped = zpp.Group(2, 2, source);
+        const grouped = zpp.group(2, 2, source);
         const grouped_region = grouped.getRegion();
 
         try std.testing.expectEqual(tc.expected_w, grouped_region.width);
@@ -44,10 +44,10 @@ test "Group: ungroup round-trip preserves region" {
         const region: zpp.Region = .{ .x = 0, .y = 0, .width = tc.w, .height = tc.h };
 
         var data = [_]f32{0} ** 128;
-        const source = zpp.In(f32, data[0 .. tc.w * tc.h], region.width, region);
+        const source = zpp.makeSource(f32, data[0 .. tc.w * tc.h], region.width, region);
 
-        const grouped = zpp.Group(2, 2, source);
-        const ungrouped = zpp.Ungroup(2, 2, grouped);
+        const grouped = zpp.group(2, 2, source);
+        const ungrouped = zpp.ungroup(2, 2, grouped);
         const ungrouped_region = ungrouped.getRegion();
 
         try std.testing.expectEqual(tc.expected_w, ungrouped_region.width);
@@ -63,11 +63,11 @@ test "Group destination: upsampling nearest neighbor" {
     var input: [4]f32 = .{ 1.0, 2.0, 3.0, 4.0 };
     var output_data = [_]f32{0} ** 16;
 
-    const source = zpp.In(f32, &input, in_region.width, in_region);
-    const destination = zpp.Out(f32, &output_data, dst_region.width, dst_region);
+    const source = zpp.makeSource(f32, &input, in_region.width, in_region);
+    const destination = zpp.makeDest(f32, &output_data, dst_region.width, dst_region);
 
     // Group the destination - each 2x2 block maps to one source pixel
-    const grouped = zpp.GroupOut(2, 2, destination);
+    const grouped = zpp.groupDest(2, 2, destination);
 
     // Kernel that replicates input value to all 4 positions in the 2x2 block
     const split_kernel = struct {
@@ -81,8 +81,8 @@ test "Group destination: upsampling nearest neighbor" {
     };
 
     const ctx = split_kernel.Context{};
-    const result = zpp.Loop(f32x4, .{}, source, ctx, split_kernel.process);
-    zpp.Process(result, grouped);
+    const result = zpp.loop(f32x4, .{}, source, ctx, split_kernel.process);
+    zpp.process(result, grouped);
 
     const expected_data = [_]f32{
         1, 1, 2, 2,
@@ -107,19 +107,19 @@ test "Group: depth to space 2x2 rearrangement" {
     var input_d: [4]f32 = .{ 1000.0, 2000.0, 3000.0, 4000.0 };
     var output_data = [_]f32{0} ** 16;
 
-    const source_a = zpp.In(f32, &input_a, in_region.width, in_region);
-    const source_b = zpp.In(f32, &input_b, in_region.width, in_region);
-    const source_c = zpp.In(f32, &input_c, in_region.width, in_region);
-    const source_d = zpp.In(f32, &input_d, in_region.width, in_region);
-    const destination = zpp.Out(f32, &output_data, out_region.width, out_region);
+    const source_a = zpp.makeSource(f32, &input_a, in_region.width, in_region);
+    const source_b = zpp.makeSource(f32, &input_b, in_region.width, in_region);
+    const source_c = zpp.makeSource(f32, &input_c, in_region.width, in_region);
+    const source_d = zpp.makeSource(f32, &input_d, in_region.width, in_region);
+    const destination = zpp.makeDest(f32, &output_data, out_region.width, out_region);
 
     // Zip the 4 source channels
-    const zipped = zpp.Zip(.{ source_a, source_b, source_c, source_d });
+    const zipped = zpp.zip(.{ source_a, source_b, source_c, source_d });
 
     // Group the destination (2x2 blocks)
-    const grouped = zpp.GroupOut(2, 2, destination);
+    const grouped = zpp.groupDest(2, 2, destination);
 
-    zpp.Process(zipped, grouped);
+    zpp.process(zipped, grouped);
 
     const expected_data = [_]f32{
         1,   10,   2,   20,
@@ -142,13 +142,13 @@ test "Group: depth to space 2x2 rearrangement with intermediate kernel" {
     var input_d: [4]f32 = .{ 1000.0, 2000.0, 3000.0, 4000.0 };
     var output_data = [_]f32{0} ** 16;
 
-    const source_a = zpp.In(f32, &input_a, in_region.width, in_region);
-    const source_b = zpp.In(f32, &input_b, in_region.width, in_region);
-    const source_c = zpp.In(f32, &input_c, in_region.width, in_region);
-    const source_d = zpp.In(f32, &input_d, in_region.width, in_region);
-    const destination = zpp.Out(f32, &output_data, out_region.width, out_region);
+    const source_a = zpp.makeSource(f32, &input_a, in_region.width, in_region);
+    const source_b = zpp.makeSource(f32, &input_b, in_region.width, in_region);
+    const source_c = zpp.makeSource(f32, &input_c, in_region.width, in_region);
+    const source_d = zpp.makeSource(f32, &input_d, in_region.width, in_region);
+    const destination = zpp.makeDest(f32, &output_data, out_region.width, out_region);
 
-    const zipped = zpp.Zip(.{ source_a, source_b, source_c, source_d });
+    const zipped = zpp.zip(.{ source_a, source_b, source_c, source_d });
 
     // Kernel that doubles channel 'a' values
     const double_a_kernel = struct {
@@ -161,11 +161,11 @@ test "Group: depth to space 2x2 rearrangement with intermediate kernel" {
         }
     };
 
-    const grouped = zpp.GroupOut(2, 2, destination);
+    const grouped = zpp.groupDest(2, 2, destination);
 
     const ctx = double_a_kernel.Context{};
-    const result = zpp.Loop(f32x4, .{}, zipped, ctx, double_a_kernel.process);
-    zpp.Process(result, grouped);
+    const result = zpp.loop(f32x4, .{}, zipped, ctx, double_a_kernel.process);
+    zpp.process(result, grouped);
 
     const expected_data = [_]f32{
         2,   10,   4,   20,
@@ -192,24 +192,24 @@ test "Group: space to depth 2x2 rearrangement" {
     var output_data_c: [4]f32 = .{ 0, 0, 0, 0 };
     var output_data_d: [4]f32 = .{ 0, 0, 0, 0 };
 
-    const source = zpp.In(f32, &input, region.width, region);
+    const source = zpp.makeSource(f32, &input, region.width, region);
     // Group the source - each 2x2 block becomes one pixel with 4 channels
-    const grouped = zpp.Group(2, 2, source);
+    const grouped = zpp.group(2, 2, source);
 
     const destination_region = grouped.getRegion();
     const expected_dst_region: zpp.Region = .{ .x = 0, .y = 0, .width = 2, .height = 2 };
     try std.testing.expectEqual(expected_dst_region.width, destination_region.width);
     try std.testing.expectEqual(expected_dst_region.height, destination_region.height);
 
-    const destination_a = zpp.Out(f32, &output_data_a, destination_region.width, destination_region);
-    const destination_b = zpp.Out(f32, &output_data_b, destination_region.width, destination_region);
-    const destination_c = zpp.Out(f32, &output_data_c, destination_region.width, destination_region);
-    const destination_d = zpp.Out(f32, &output_data_d, destination_region.width, destination_region);
+    const destination_a = zpp.makeDest(f32, &output_data_a, destination_region.width, destination_region);
+    const destination_b = zpp.makeDest(f32, &output_data_b, destination_region.width, destination_region);
+    const destination_c = zpp.makeDest(f32, &output_data_c, destination_region.width, destination_region);
+    const destination_d = zpp.makeDest(f32, &output_data_d, destination_region.width, destination_region);
 
     // Zip the destinations to receive the 4 channels
-    const zipped_dest = zpp.ZipOut(.{ destination_a, destination_b, destination_c, destination_d });
+    const zipped_dest = zpp.zipDest(.{ destination_a, destination_b, destination_c, destination_d });
 
-    zpp.Process(grouped, zipped_dest);
+    zpp.process(grouped, zipped_dest);
 
     const expected_data_a = [_]f32{
         1, 3,
@@ -248,22 +248,22 @@ test "Group: space to depth 2x2 rearrangement with intermediate kernel" {
     var output_data_c: [4]f32 = .{ 0, 0, 0, 0 };
     var output_data_d: [4]f32 = .{ 0, 0, 0, 0 };
 
-    const source = zpp.In(f32, &input, region.width, region);
+    const source = zpp.makeSource(f32, &input, region.width, region);
     // Group the source
-    const grouped = zpp.Group(2, 2, source);
+    const grouped = zpp.group(2, 2, source);
 
     const destination_region = grouped.getRegion();
     const expected_dst_region: zpp.Region = .{ .x = 0, .y = 0, .width = 2, .height = 2 };
     try std.testing.expectEqual(expected_dst_region.width, destination_region.width);
     try std.testing.expectEqual(expected_dst_region.height, destination_region.height);
 
-    const destination_a = zpp.Out(f32, &output_data_a, destination_region.width, destination_region);
-    const destination_b = zpp.Out(f32, &output_data_b, destination_region.width, destination_region);
-    const destination_c = zpp.Out(f32, &output_data_c, destination_region.width, destination_region);
-    const destination_d = zpp.Out(f32, &output_data_d, destination_region.width, destination_region);
+    const destination_a = zpp.makeDest(f32, &output_data_a, destination_region.width, destination_region);
+    const destination_b = zpp.makeDest(f32, &output_data_b, destination_region.width, destination_region);
+    const destination_c = zpp.makeDest(f32, &output_data_c, destination_region.width, destination_region);
+    const destination_d = zpp.makeDest(f32, &output_data_d, destination_region.width, destination_region);
 
     // Zip the destinations
-    const zipped_dest = zpp.ZipOut(.{ destination_a, destination_b, destination_c, destination_d });
+    const zipped_dest = zpp.zipDest(.{ destination_a, destination_b, destination_c, destination_d });
 
     // Process with a kernel that outputs to three destinations
     // Kernel returns a tuple, Loop takes just f32x4
@@ -278,8 +278,8 @@ test "Group: space to depth 2x2 rearrangement with intermediate kernel" {
     };
 
     const ctx = split_kernel.Context{};
-    const result = zpp.Loop(f32x4, .{}, grouped, ctx, split_kernel.process);
-    zpp.Process(result, zipped_dest);
+    const result = zpp.loop(f32x4, .{}, grouped, ctx, split_kernel.process);
+    zpp.process(result, zipped_dest);
 
     const expected_data_a = [_]f32{
         2,  6,

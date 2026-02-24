@@ -27,12 +27,12 @@ test "Source: Default padding repeats edge pixels correctly" {
 
         var source_data = [_]ScalarType{0} ** (image_width * image_height);
         th.fillRamp(ScalarType, &source_data, 1, 1);
-        const source = zpp.In(ScalarType, &source_data, input_stride, input_region);
+        const source = zpp.makeSource(ScalarType, &source_data, input_stride, input_region);
 
         var output_data = [_]ScalarType{0} ** (image_width * image_height);
-        const destination = zpp.Out(ScalarType, &output_data, output_stride, output_region);
+        const destination = zpp.makeDest(ScalarType, &output_data, output_stride, output_region);
 
-        zpp.Process(source, destination);
+        zpp.process(source, destination);
 
         const expected_data: [45]ScalarType = .{
             0, 0, 0,  0,  0,  0,  0,  0, 0,
@@ -60,12 +60,12 @@ test "Source: RepeatPadding repeats edge pixels correctly" {
 
         var source_data = [_]ScalarType{0} ** (image_width * image_height);
         th.fillRamp(ScalarType, &source_data, 1, 1);
-        const source = zpp.InWithPadding(ScalarType, zpp.RepeatEdgePadding, &source_data, input_stride, input_region);
+        const source = zpp.makePaddedSource(ScalarType, zpp.RepeatEdgePadding, &source_data, input_stride, input_region);
 
         var output_data = [_]ScalarType{0} ** (image_width * image_height);
-        const destination = zpp.Out(ScalarType, &output_data, output_stride, output_region);
+        const destination = zpp.makeDest(ScalarType, &output_data, output_stride, output_region);
 
-        zpp.Process(source, destination);
+        zpp.process(source, destination);
 
         const expected_data: [45]ScalarType = .{
             0, 0, 0,  0,  0,  0,  0,  0, 0,
@@ -93,12 +93,12 @@ test "Source: ZeroPadding fill edge pixels correctly" {
 
         var source_data = [_]ScalarType{0} ** (image_width * image_height);
         th.fillRamp(ScalarType, &source_data, 1, 1);
-        const source = zpp.InWithPadding(ScalarType, zpp.ZeroPadding, &source_data, input_stride, input_region);
+        const source = zpp.makePaddedSource(ScalarType, zpp.ZeroPadding, &source_data, input_stride, input_region);
 
         var output_data = [_]ScalarType{1} ** (image_width * image_height);
-        const destination = zpp.Out(ScalarType, &output_data, output_stride, output_region);
+        const destination = zpp.makeDest(ScalarType, &output_data, output_stride, output_region);
 
-        zpp.Process(source, destination);
+        zpp.process(source, destination);
 
         const expected_data: [45]ScalarType = .{
             1, 1, 1,  1,  1,  1, 1, 1, 1,

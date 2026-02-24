@@ -147,7 +147,7 @@ pub fn CachedLoopResult(
 ) type {
     const vec_len = @typeInfo(VecT).vector.len;
     const ElemT = @typeInfo(VecT).vector.child;
-    const has_coords = opts.need_coordinates != null;
+    const has_coords = opts.coord_type != null;
     const is_zip_source = zip_mod.isZipSourceType(SrcType);
 
     // Import the accessor types - these need to be resolved at comptime
@@ -206,13 +206,10 @@ pub fn CachedLoopResult(
                 };
 
                 const result: VecT = if (has_coords) blk: {
-                    const CoordT = opts.need_coordinates.?;
-                    var x_coords: CoordT = undefined;
-                    var y_coords: CoordT = undefined;
-                    inline for (0..vec_len) |i| {
-                        x_coords[i] = @intCast(x32 + @as(i32, @intCast(i)));
-                        y_coords[i] = @intCast(y32);
-                    }
+                    const CoordT = opts.coord_type.?;
+                    const iota = std.simd.iota(@typeInfo(CoordT).vector.child, vec_len);
+                    const x_coords: CoordT = iota + loop_mod.castScalarCoordToVector(CoordT, x32);
+                    const y_coords: CoordT = loop_mod.castScalarCoordToVector(CoordT, y32);
                     break :blk process_fn(self.context, accessor, x_coords, y_coords);
                 } else process_fn(self.context, accessor);
 
@@ -252,7 +249,7 @@ pub fn CachedLoopResult(
 /// Use this when you have vertical margins and want to avoid recomputing rows.
 /// The cache size should be at least `margin.top + 1 + margin.bottom`.
 /// The cache is heap-allocated so that copies share the same underlying data.
-pub fn CachedLoop(
+pub fn cachedLoop(
     comptime VecT: type,
     comptime opts: DefaultLoopOptions,
     comptime max_cache_rows: usize,

@@ -116,17 +116,17 @@ fn EvalTranslatedSource(comptime SourceType: type) type {
 ///
 /// Example — shift an image 10 pixels right and 5 pixels down:
 /// ```zig
-/// const shifted = zpp.Translate(source, 10, 5);
-/// zpp.Process(shifted, dest);
+/// const shifted = zpp.translate(source, 10, 5);
+/// zpp.process(shifted, dest);
 /// ```
 ///
 /// Example — blend two shifted copies:
 /// ```zig
-/// const left  = zpp.Translate(source, -5, 0);
-/// const right = zpp.Translate(source,  5, 0);
-/// const zipped = zpp.Zip(.{left, right});
-/// const blended = zpp.Loop(f32x4, .{}, zipped, .{}, blend_kernel);
+/// const left  = zpp.translate(source, -5, 0);
+/// const right = zpp.translate(source,  5, 0);
+/// const zipped = zpp.zip(.{left, right});
+/// const blended = zpp.loop(f32x4, .{}, zipped, .{}, blend_kernel);
 /// ```
-pub fn Translate(source: anytype, dx: i32, dy: i32) TranslatedSource(@TypeOf(source)) {
+pub fn translate(source: anytype, dx: i32, dy: i32) TranslatedSource(@TypeOf(source)) {
     return .{ .source = source, .dx = dx, .dy = dy };
 }

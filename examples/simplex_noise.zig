@@ -2,9 +2,9 @@
 //! Generates a 2D simplex noise texture and saves it as a PPM file.
 //!
 //! This example demonstrates:
-//! - Using zpp.Generate to create procedural textures from coordinates
+//! - Using zpp.generate to create procedural textures from coordinates
 //! - SIMD-accelerated simplex noise implementation
-//! - Converting grayscale to RGB output using zpp.InterleavedOut
+//! - Converting grayscale to RGB output using zpp.makeInterleavedDest
 //!
 //! The noise implementation uses a pure SIMD approach where gradients are computed
 //! inline via hash functions, which is very efficient on modern CPUs.
@@ -139,7 +139,7 @@ pub const NoiseContext = struct {
     offset_y: f32v,
 };
 
-/// Simplex noise generator kernel for zpp.Generate.
+/// Simplex noise generator kernel for zpp.generate.
 /// Returns RGB values as u8 (grayscale noise mapped to all channels).
 pub fn noiseProcess(ctx: NoiseContext, x: f32v, y: f32v) [3]u8v {
     // Scale coordinates
@@ -179,9 +179,9 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
         .height = height,
     };
 
-    const destination = zpp.InterleavedOut(u8, 3, data, width, region);
-    const generator = zpp.Generate(f32v, context, noiseProcess);
-    zpp.Process(generator, destination);
+    const destination = zpp.makeInterleavedDest(u8, 3, data, width, region);
+    const generator = zpp.generate(f32v, context, noiseProcess);
+    zpp.process(generator, destination);
 
     return data;
 }

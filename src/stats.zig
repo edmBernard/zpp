@@ -36,12 +36,9 @@ pub fn StatsDest(
         pub fn write(self: Self, x: u32, y: u32, values: VecT) void {
             if (has_coords) {
                 // Build coordinate vectors
-                var x_vec: @Vector(vec_len, i32) = undefined;
-                var y_vec: @Vector(vec_len, i32) = undefined;
-                inline for (0..vec_len) |i| {
-                    x_vec[i] = @as(i32, @intCast(x)) + self.region.x + @as(i32, @intCast(i));
-                    y_vec[i] = @as(i32, @intCast(y)) + self.region.y;
-                }
+                const iota = std.simd.iota(i32, vec_len);
+                const x_vec: @Vector(vec_len, i32) = iota + @as(@Vector(vec_len, i32), @splat(@as(i32, @intCast(x)) + self.region.x));
+                const y_vec: @Vector(vec_len, i32) = @splat(@as(i32, @intCast(y)) + self.region.y);
                 stats_fn(self.context, values, x_vec, y_vec);
             } else {
                 stats_fn(self.context, values);
@@ -81,11 +78,11 @@ pub fn StatsDest(
 ///     }
 /// };
 /// var ctx = stats_kernel.Context{};
-/// const stats_dest = Stats(f32x4, &ctx, region, stats_kernel.accumulate);
-/// Process(source, stats_dest);
+/// const stats_dest = stats(f32x4, &ctx, region, stats_kernel.accumulate);
+/// process(source, stats_dest);
 /// // ctx.sum and ctx.count now contain accumulated values
 /// ```
-pub fn Stats(
+pub fn stats(
     comptime VecT: type,
     context: anytype,
     region: Region,
@@ -99,7 +96,7 @@ pub fn Stats(
 
 /// Create a Stats destination expression with coordinate support.
 /// The stats_fn receives pixel values and x/y coordinate vectors.
-pub fn StatsWithCoords(
+pub fn statsWithCoords(
     comptime VecT: type,
     context: anytype,
     region: Region,

@@ -2,9 +2,9 @@
 //! Generates a simple checkerboard pattern and saves it as a PPM file.
 //!
 //! This example demonstrates:
-//! - Using zpp.Generate to create procedural textures from coordinates
+//! - Using zpp.generate to create procedural textures from coordinates
 //! - Basic SIMD operations for pattern generation
-//! - Converting to RGB output using zpp.InterleavedOut
+//! - Converting to RGB output using zpp.makeInterleavedDest
 
 const std = @import("std");
 const zpp = @import("zpp");
@@ -33,7 +33,7 @@ const CheckerboardContext = struct {
     square_size: f32v,
 };
 
-/// Checkerboard generator kernel for zpp.Generate.
+/// Checkerboard generator kernel for zpp.generate.
 /// Returns RGB values as u8 (black or white based on checker pattern).
 fn checkerboardProcess(ctx: CheckerboardContext, x: f32v, y: f32v) [3]u8v {
     // Compute which square we're in
@@ -70,9 +70,9 @@ fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32, square_s
         .height = height,
     };
 
-    const destination = zpp.InterleavedOut(u8, 3, data, width, region);
-    const generator = zpp.Generate(f32v, context, checkerboardProcess);
-    zpp.Process(generator, destination);
+    const destination = zpp.makeInterleavedDest(u8, 3, data, width, region);
+    const generator = zpp.generate(f32v, context, checkerboardProcess);
+    zpp.process(generator, destination);
 
     return data;
 }

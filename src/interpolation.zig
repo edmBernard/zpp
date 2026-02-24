@@ -199,12 +199,9 @@ pub fn InterpLoopResult(
             };
 
             // Build coordinate vectors for output position
-            var x_vec: VecT = undefined;
-            var y_vec: VecT = undefined;
-            inline for (0..vec_len) |i| {
-                x_vec[i] = @floatFromInt(x + @as(i32, @intCast(i)));
-                y_vec[i] = @floatFromInt(y);
-            }
+            const iota: VecT = @floatFromInt(std.simd.iota(i32, vec_len));
+            const x_vec: VecT = iota + @as(VecT, @splat(@as(f32, @floatFromInt(x))));
+            const y_vec: VecT = @splat(@as(f32, @floatFromInt(y)));
 
             // Call kernel with interpolator and output coordinates
             return process_fn(self.context, interpolator, x_vec, y_vec);
@@ -255,7 +252,7 @@ pub fn InterpLoopResult(
 ///     }
 /// };
 /// ```
-pub fn InterpLoop(
+pub fn interpLoop(
     comptime VecT: type,
     comptime method: InterpolationMethod,
     source: anytype,

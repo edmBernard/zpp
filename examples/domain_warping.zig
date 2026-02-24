@@ -2,7 +2,7 @@
 //! Generates procedural textures using domain warping and fractional Brownian motion (fBm).
 //! Adapted from Inigo Quilez: https://iquilezles.org/articles/fbm/
 //!
-//! This example demonstrates the use of zpp's Generate and Process primitives
+//! This example demonstrates the use of zpp's generate and process primitives
 //! to create SIMD-accelerated procedural texture generation.
 //!
 //! The simplex noise implementation uses a pure SIMD approach where the hash function
@@ -282,7 +282,7 @@ inline fn applyColorMapping(f: f32v, r: Vec2, q: Vec2) Vec3 {
     return temp.pow(3);
 }
 
-/// Domain warping process function for zpp.Generate
+/// Domain warping process function for zpp.generate
 /// Returns RGB values as u8
 pub fn domainWarpingProcess(ctx: DomainWarpingContext, x: f32v, y: f32v) [3]u8v {
     const xs = x / ctx.scale + ctx.sin_time;
@@ -324,9 +324,9 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
         .height = height,
     };
 
-    const destination = zpp.InterleavedOut(u8, 3, data, width, region);
-    const generator = zpp.Generate(f32v, context, domainWarpingProcess);
-    zpp.Process(generator, destination);
+    const destination = zpp.makeInterleavedDest(u8, 3, data, width, region);
+    const generator = zpp.generate(f32v, context, domainWarpingProcess);
+    zpp.process(generator, destination);
 
     return data;
 }

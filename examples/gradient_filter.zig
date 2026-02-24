@@ -6,14 +6,14 @@
 //! Then saves the result as a PPM file.
 //!
 //! This example demonstrates:
-//! - Using zpp.Generate to create procedural textures
-//! - Using zpp.InterpLoop for interpolated sampling (resize)
-//! - Using zpp.Loop with margins for convolution filters (gradient)
+//! - Using zpp.generate to create procedural textures
+//! - Using zpp.interpLoop for interpolated sampling (resize)
+//! - Using zpp.loop with margins for convolution filters (gradient)
 //! - Expression tree chaining (composing multiple operations lazily)
 //! - Custom kernels for gamma correction
 //!
 //! Note: This example uses f32x4 (4-element vectors) throughout for consistency
-//! with the library's internal processing. The library's Loop and InterpLoop
+//! with the library's internal processing. The library's loop and interpLoop
 //! operations work with vectors of length 4.
 
 const std = @import("std");
@@ -242,11 +242,11 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
 
     // Stage 1: Generate simplex noise (resolution determined by output region)
     const noise_ctx = NoiseContext{ .scale = zpp.math.splat(f32v, 50.0) };
-    const noise_source = zpp.Generate(f32v, noise_ctx, noiseKernel);
+    const noise_source = zpp.generate(f32v, noise_ctx, noiseKernel);
 
     // Stage 2: Resize 2x with bilinear interpolation
     const resize_ctx = ResizeContext{ .scale = zpp.math.splat(f32v, 0.5) };
-    const resized = zpp.InterpLoop(
+    const resized = zpp.interpLoop(
         f32v,
         .linear, // Bilinear interpolation
         noise_source,
@@ -257,7 +257,7 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
 
     // Stage 3: Apply gradient filter (edge detection)
     const gradient_ctx = GradientContext{};
-    const edges = zpp.Loop(
+    const edges = zpp.loop(
         f32v,
         .{ .margin = zpp.Margin.uniform(1) }, // Need 1-pixel margin for 3x3 kernel
         resized,
@@ -267,10 +267,10 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
 
     // Stage 4: Apply gamma correction to enhance contrast
     const gamma_ctx = GammaContext{ .gamma = 0.6 }; // Brighten the edges
-    const corrected = zpp.Loop(f32v, .{}, edges, gamma_ctx, gammaKernel);
+    const corrected = zpp.loop(f32v, .{}, edges, gamma_ctx, gammaKernel);
     // Process the expression tree and write to grayscale buffer
-    const gray_dest = zpp.Out(f32, gray_data, width, output_region);
-    zpp.Process(corrected, gray_dest);
+    const gray_dest = zpp.makeDest(f32, gray_data, width, output_region);
+    zpp.process(corrected, gray_dest);
 
     // Convert grayscale to RGB
     const rgb_size = width * height * 3;
@@ -352,12 +352,12 @@ test "gamma kernel with gamma=1.0 is identity" {
     var input: [4]f32 = .{ 0.25, 0.5, 0.75, 1.0 };
     var output: [4]f32 = .{ 0, 0, 0, 0 };
 
-    const source = zpp.In(f32, &input, 4, region);
-    const dest = zpp.Out(f32, &output, 4, region);
+    const source = zpp.makeSource(f32, &input, 4, region);
+    const dest = zpp.makeDest(f32, &output, 4, region);
 
     const ctx = GammaContext{ .gamma = 1.0 };
-    const result = zpp.Loop(f32v, .{}, source, ctx, gammaKernel);
-    zpp.Process(result, dest);
+    const result = zpp.loop(f32v, .{}, source, ctx, gammaKernel);
+    zpp.process(result, dest);
 
     // With gamma=1.0, output should equal input
     for (0..4) |i| {
@@ -375,12 +375,12 @@ test "gradient kernel detects edges" {
     };
     var output: [12]f32 = .{0} ** 12;
 
-    const source = zpp.In(f32, &input, 4, region);
-    const dest = zpp.Out(f32, &output, 4, region);
+    const source = zpp.makeSource(f32, &input, 4, region);
+    const dest = zpp.makeDest(f32, &output, 4, region);
 
     const ctx = GradientContext{};
-    const result = zpp.Loop(f32v, .{ .margin = zpp.Margin.uniform(1) }, source, ctx, gradientKernel);
-    zpp.Process(result, dest);
+    const result = zpp.loop(f32v, .{ .margin = zpp.Margin.uniform(1) }, source, ctx, gradientKernel);
+    zpp.process(result, dest);
 
     // Center column (x=1, x=2) should have high gradient values
     // The edge is between columns 1 and 2
@@ -394,8 +394,8 @@ test "expression tree chaining works" {
     var input: [4]f32 = .{ 0.1, 0.2, 0.3, 0.4 };
     var output: [4]f32 = .{ 0, 0, 0, 0 };
 
-    const source = zpp.In(f32, &input, 4, region);
-    const dest = zpp.Out(f32, &output, 4, region);
+    const source = zpp.makeSource(f32, &input, 4, region);
+    const dest = zpp.makeDest(f32, &output, 4, region);
 
     // Chain: identity -> gamma
     const identity_kernel = struct {
@@ -406,9 +406,9 @@ test "expression tree chaining works" {
         }
     };
 
-    const step1 = zpp.Loop(f32v, .{}, source, identity_kernel.Context{}, identity_kernel.process);
-    const step2 = zpp.Loop(f32v, .{}, step1, GammaContext{ .gamma = 2.0 }, gammaKernel);
-    zpp.Process(step2, dest);
+    const step1 = zpp.loop(f32v, .{}, source, identity_kernel.Context{}, identity_kernel.process);
+    const step2 = zpp.loop(f32v, .{}, step1, GammaContext{ .gamma = 2.0 }, gammaKernel);
+    zpp.process(step2, dest);
 
     // Verify output is input^2
     for (0..4) |i| {
@@ -417,8 +417,8 @@ test "expression tree chaining works" {
     }
 }
 
-test "resize with InterpLoop" {
-    // Test that InterpLoop can be used for 2x upscaling
+test "resize with interpLoop" {
+    // Test that interpLoop can be used for 2x upscaling
     const source_region = zpp.Region{ .x = 0, .y = 0, .width = 2, .height = 2 };
     const output_region = zpp.Region{ .x = 0, .y = 0, .width = 4, .height = 4 };
 
@@ -426,12 +426,12 @@ test "resize with InterpLoop" {
     var source_data: [4]f32 = .{ 0.0, 1.0, 2.0, 3.0 };
     var output_data: [16]f32 = .{0} ** 16;
 
-    const source = zpp.In(f32, &source_data, 2, source_region);
-    const dest = zpp.Out(f32, &output_data, 4, output_region);
+    const source = zpp.makeSource(f32, &source_data, 2, source_region);
+    const dest = zpp.makeDest(f32, &output_data, 4, output_region);
 
     const resize_ctx = ResizeContext{ .scale = zpp.math.splat(f32v, 0.5) };
-    const resized = zpp.InterpLoop(f32v, .linear, source, output_region, resize_ctx, resizeKernel);
-    zpp.Process(resized, dest);
+    const resized = zpp.interpLoop(f32v, .linear, source, output_region, resize_ctx, resizeKernel);
+    zpp.process(resized, dest);
 
     // Corner values should be preserved (approximately)
     // Top-left (0,0) -> samples at (0,0) = 0
