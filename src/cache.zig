@@ -4,16 +4,12 @@
 //! avoiding recomputation when accessing neighboring rows (for margins).
 
 const std = @import("std");
-const region_mod = @import("region.zig");
-const loop_mod = @import("loop.zig");
-const zip_mod = @import("zip.zig");
-const sources_mod = @import("sources.zig");
-
-const Region = region_mod.Region;
-const LoopOptions = loop_mod.LoopOptions;
-
-// Forward declaration - these will be resolved at comptime
-// InputAccessor and ZipAccessor are imported from loop.zig and zip.zig respectively
+const zip = @import("zip.zig");
+const sources = @import("sources.zig");
+const Region = @import("region.zig").Region;
+const LoopOptions = @import("loop.zig").LoopOptions;
+const InputAccessor = @import("loop.zig").InputAccessor;
+const castScalarCoordToVector = @import("loop.zig").castScalarCoordToVector;
 
 /// Row cache for intermediate results in expression trees.
 /// Uses a circular buffer to store a sliding window of rows, avoiding recomputation
@@ -38,8 +34,10 @@ fn RowCache(comptime T: type, comptime max_rows: usize) type {
         /// Whether the cache has been initialized.
         initialized: bool,
 
-        const Self = @This();
         const min_i64: i64 = std.math.minInt(i64);
+        const Self = @This();
+
+        pub const SetupError = error{CacheTooSmall} || std.mem.Allocator.Error;
 
         /// Initialize a new row cache.
         pub fn init(allocator: std.mem.Allocator) Self {
@@ -60,7 +58,7 @@ fn RowCache(comptime T: type, comptime max_rows: usize) type {
         /// Setup the cache for a given width and margin requirements.
         /// `above` is how many rows above the current row are needed.
         /// `below` is how many rows below the current row are needed.
-        pub fn setup(self: *Self, width: u32, above: u32, below: u32) !void {
+        pub fn setup(self: *Self, width: u32, above: u32, below: u32) SetupError!void {
             const needed_rows = above + 1 + below;
             if (needed_rows > max_rows) {
                 return error.CacheTooSmall;
@@ -155,13 +153,13 @@ pub fn CachedLoopResult(
         cache: *Cache,
         allocator: std.mem.Allocator,
 
-        const Self = @This();
         pub const vector_length = vec_len;
+        const Self = @This();
         const has_coords = opts.coord_type != null;
-        const AccessorType = if (zip_mod.isZipSourceType(SrcType))
-            zip_mod.ZipAccessor(SrcType, VecT)
+        const AccessorType = if (zip.isZipSourceType(SrcType))
+            zip.ZipAccessor(SrcType, VecT)
         else
-            loop_mod.InputAccessor(SrcType, VecT);
+            InputAccessor(SrcType, VecT);
 
         /// Free cache memory and the heap allocation.
         pub fn deinit(self: Self) void {
@@ -204,8 +202,8 @@ pub fn CachedLoopResult(
                 const result: VecT = if (has_coords) blk: {
                     const CoordT = opts.coord_type.?;
                     const iota = std.simd.iota(@typeInfo(CoordT).vector.child, vec_len);
-                    const x_coords: CoordT = iota + loop_mod.castScalarCoordToVector(CoordT, x32);
-                    const y_coords: CoordT = loop_mod.castScalarCoordToVector(CoordT, y32);
+                    const x_coords: CoordT = iota + castScalarCoordToVector(CoordT, x32);
+                    const y_coords: CoordT = castScalarCoordToVector(CoordT, y32);
                     break :blk kernel_fn(self.context, accessor, x_coords, y_coords);
                 } else kernel_fn(self.context, accessor);
 
@@ -236,10 +234,6 @@ pub fn CachedLoopResult(
             }
             return result;
         }
-
-        pub fn getRegion(self: Self) Region {
-            return self.region;
-        }
     };
 }
 
@@ -256,23 +250,21 @@ pub fn cachedLoop(
     context: anytype,
     comptime process_fn: anytype,
 ) !CachedLoopResult(VecT, @TypeOf(source), @TypeOf(context), process_fn, opts, max_cache_rows) {
-    comptime sources_mod.assertIsSource(@TypeOf(source));
+    comptime sources.assertIsSource(@TypeOf(source));
 
     const ElemT = @typeInfo(VecT).vector.child;
     const Cache = RowCache(ElemT, max_cache_rows);
-
-    const region = sources_mod.getSourceRegion(source);
 
     const cache = try allocator.create(Cache);
     errdefer allocator.destroy(cache);
     cache.* = Cache.init(allocator);
     errdefer cache.deinit();
-    try cache.setup(region.width, opts.margin.top, opts.margin.bottom);
+    try cache.setup(source.region.width, opts.margin.top, opts.margin.bottom);
 
     return .{
         .source = source,
         .context = context,
-        .region = region,
+        .region = source.region,
         .cache = cache,
         .allocator = allocator,
     };

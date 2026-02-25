@@ -9,11 +9,9 @@
 //! remain contiguous SIMD loads, unlike InterpLoop(.nearest) which
 //! would fall back to scalar gather.
 
-const region_mod = @import("region.zig");
-const sources_mod = @import("sources.zig");
-
-const Region = region_mod.Region;
-const Margin = region_mod.Margin;
+const sources = @import("sources.zig");
+const Region = @import("region.zig").Region;
+const Margin = @import("region.zig").Margin;
 
 // ============================================================================
 // MARK: Translated Source Types
@@ -23,13 +21,10 @@ const Margin = region_mod.Margin;
 /// InputSource-like sources (with readVec) get DataTranslatedSource.
 /// LoopResult-like sources (with evalAt) get EvalTranslatedSource.
 fn TranslatedSource(comptime SourceType: type) type {
-    if (@hasDecl(SourceType, "evalAt")) {
-        return EvalTranslatedSource(SourceType);
-    } else if (@hasDecl(SourceType, "readVec")) {
-        return DataTranslatedSource(SourceType);
-    } else {
-        @compileError("Translate: source must have evalAt or readVec method");
-    }
+    return switch (comptime sources.SourceKind(SourceType)) {
+        .eval => EvalTranslatedSource(SourceType),
+        .read => DataTranslatedSource(SourceType),
+    };
 }
 
 /// Translated wrapper for InputSource-like sources (readVec-based).
@@ -39,14 +34,10 @@ fn DataTranslatedSource(comptime SourceType: type) type {
         source: SourceType,
         dx: i32,
         dy: i32,
-
-        const Self = @This();
+        region: Region,
 
         pub const OutputScalarType = SourceType.OutputScalarType;
-
-        pub fn getRegion(self: Self) Region {
-            return self.source.region.shifted(self.dx, self.dy);
-        }
+        const Self = @This();
 
         pub fn read(self: Self, x: i32, y: i32) OutputScalarType {
             return self.source.read(x - self.dx, y - self.dy);
@@ -72,16 +63,12 @@ fn EvalTranslatedSource(comptime SourceType: type) type {
         source: SourceType,
         dx: i32,
         dy: i32,
-
-        const Self = @This();
+        region: Region,
 
         pub const OutputType = SourceType.OutputType;
         pub const vector_length = SourceType.vector_length;
         pub const margin = if (@hasDecl(SourceType, "margin")) SourceType.margin else Margin{};
-
-        pub fn getRegion(self: Self) Region {
-            return self.source.getRegion().shifted(self.dx, self.dy);
-        }
+        const Self = @This();
 
         pub inline fn evalAt(self: Self, x: i32, y: i32) OutputType {
             return self.source.evalAt(x - self.dx, y - self.dy);
@@ -129,6 +116,11 @@ fn EvalTranslatedSource(comptime SourceType: type) type {
 /// const blended = zpp.loop(f32x4, .{}, zipped, .{}, blend_kernel);
 /// ```
 pub fn translate(source: anytype, dx: i32, dy: i32) TranslatedSource(@TypeOf(source)) {
-    comptime sources_mod.assertIsSource(@TypeOf(source));
-    return .{ .source = source, .dx = dx, .dy = dy };
+    comptime sources.assertIsSource(@TypeOf(source));
+    return .{
+        .source = source,
+        .dx = dx,
+        .dy = dy,
+        .region = source.region.shifted(dx, dy),
+    };
 }

@@ -23,7 +23,7 @@ test "Group: 2x2 source downscales region correctly" {
         const source = zpp.makeSource(f32, data[0 .. tc.w * tc.h], region.width, region);
 
         const grouped = zpp.group(2, 2, source);
-        const grouped_region = grouped.getRegion();
+        const grouped_region = grouped.region;
 
         try std.testing.expectEqual(tc.expected_w, grouped_region.width);
         try std.testing.expectEqual(tc.expected_h, grouped_region.height);
@@ -48,7 +48,7 @@ test "Group: ungroup round-trip preserves region" {
 
         const grouped = zpp.group(2, 2, source);
         const ungrouped = zpp.ungroup(2, 2, grouped);
-        const ungrouped_region = ungrouped.getRegion();
+        const ungrouped_region = ungrouped.region;
 
         try std.testing.expectEqual(tc.expected_w, ungrouped_region.width);
         try std.testing.expectEqual(tc.expected_h, ungrouped_region.height);
@@ -196,7 +196,7 @@ test "Group: space to depth 2x2 rearrangement" {
     // Group the source - each 2x2 block becomes one pixel with 4 channels
     const grouped = zpp.group(2, 2, source);
 
-    const destination_region = grouped.getRegion();
+    const destination_region = grouped.region;
     const expected_dst_region: zpp.Region = .{ .x = 0, .y = 0, .width = 2, .height = 2 };
     try std.testing.expectEqual(expected_dst_region.width, destination_region.width);
     try std.testing.expectEqual(expected_dst_region.height, destination_region.height);
@@ -252,7 +252,7 @@ test "Group: space to depth 2x2 rearrangement with intermediate kernel" {
     // Group the source
     const grouped = zpp.group(2, 2, source);
 
-    const destination_region = grouped.getRegion();
+    const destination_region = grouped.region;
     const expected_dst_region: zpp.Region = .{ .x = 0, .y = 0, .width = 2, .height = 2 };
     try std.testing.expectEqual(expected_dst_region.width, destination_region.width);
     try std.testing.expectEqual(expected_dst_region.height, destination_region.height);

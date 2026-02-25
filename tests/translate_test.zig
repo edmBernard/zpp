@@ -237,7 +237,7 @@ test "Translate: region is correctly shifted" {
     const source = zpp.makeSource(f32, &source_data, 1, src_region);
 
     const translated = zpp.translate(source, 3, -7);
-    const region = translated.getRegion();
+    const region = translated.region;
 
     try std.testing.expectEqual(@as(i32, 8), region.x);
     try std.testing.expectEqual(@as(i32, 3), region.y);

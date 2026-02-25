@@ -11,16 +11,16 @@ const std = @import("std");
 // MARK: Module Imports
 // ============================================================================
 
-const region_mod = @import("region.zig");
-const padding_mod = @import("padding.zig");
+const region = @import("region.zig");
+const padding = @import("padding.zig");
 const sources_mod = @import("sources.zig");
 const translate_mod = @import("translate.zig");
 const zip_mod = @import("zip.zig");
 const group_mod = @import("group.zig");
 const stats_mod = @import("stats.zig");
-const interpolation_mod = @import("interpolation.zig");
-const cache_mod = @import("cache.zig");
+const interpolation = @import("interpolation.zig");
 const loop_mod = @import("loop.zig");
+const cache = @import("cache.zig");
 
 // ============================================================================
 // MARK: Re-exported Types and Constants
@@ -39,12 +39,12 @@ pub fn VectorLike(comptime VectorType: type, comptime ScalarType: type) type {
 }
 
 // Region module
-pub const Region = region_mod.Region;
-pub const Margin = region_mod.Margin;
+pub const Region = region.Region;
+pub const Margin = region.Margin;
 
 // Padding module
-pub const ZeroPadding = padding_mod.ZeroPadding;
-pub const RepeatEdgePadding = padding_mod.RepeatEdgePadding;
+pub const ZeroPadding = padding.ZeroPadding;
+pub const RepeatEdgePadding = padding.RepeatEdgePadding;
 
 // Sources module
 pub const makeSource = sources_mod.makeSource;
@@ -70,16 +70,17 @@ pub const stats = stats_mod.stats;
 pub const statsWithCoords = stats_mod.statsWithCoords;
 
 // Interpolation module
-pub const InterpolationMethod = interpolation_mod.InterpolationMethod;
-pub const interpLoop = interpolation_mod.interpLoop;
-pub const LoopOptions = loop_mod.LoopOptions;
+pub const InterpolationMethod = interpolation.InterpolationMethod;
+pub const interpLoop = interpolation.interpLoop;
 
 // Loop module (core processing)
+pub const LoopOptions = loop_mod.LoopOptions;
 pub const loop = loop_mod.loop;
 pub const generate = loop_mod.generate;
 pub const process = loop_mod.process;
+
 // Cache module
-pub const cachedLoop = cache_mod.cachedLoop;
+pub const cachedLoop = cache.cachedLoop;
 
 // ============================================================================
 // MARK: Math Functions

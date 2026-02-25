@@ -1,16 +1,14 @@
 //! Group and Ungroup support for Bayer patterns and P x Q pixel grouping.
 
 const std = @import("std");
-const region_mod = @import("region.zig");
-const zip_mod = @import("zip.zig");
-const sources_mod = @import("sources.zig");
-
-const Region = region_mod.Region;
-const VecTuple = zip_mod.VecTuple;
+const sources = @import("sources.zig");
+const zip = @import("zip.zig");
+const Region = @import("region.zig").Region;
+const VecTuple = zip.VecTuple;
 
 /// Get vector length from a source type, defaulting to 4.
 fn getSourceVecLen(comptime SourceType: type) comptime_int {
-    return zip_mod.getSourceVecLen(SourceType) orelse 4;
+    return zip.getSourceVecLen(SourceType) orelse 4;
 }
 
 // ============================================================================
@@ -29,9 +27,7 @@ pub fn GroupSource(comptime NestedSource: type, comptime P: comptime_int, compti
         nested: NestedSource,
         region: Region,
 
-        const Self = @This();
-
-        pub const source_tag = sources_mod.SourceTag.group;
+        pub const source_tag = sources.SourceTag.group;
 
         /// The group dimensions
         pub const group_width = P;
@@ -44,9 +40,7 @@ pub fn GroupSource(comptime NestedSource: type, comptime P: comptime_int, compti
         /// The vector type used by this GroupSource
         pub const VectorType = VecT;
 
-        pub fn getRegion(self: Self) Region {
-            return self.region;
-        }
+        const Self = @This();
 
         /// Evaluate at a grouped position - returns a tuple of PxQ values
         pub inline fn evalAt(self: Self, x: i32, y: i32) ResultTuple {
@@ -82,7 +76,7 @@ pub fn GroupSource(comptime NestedSource: type, comptime P: comptime_int, compti
 /// Group a source expression, treating PxQ blocks as single pixels.
 /// The output region is downscaled by P horizontally and Q vertically.
 pub fn group(comptime P: comptime_int, comptime Q: comptime_int, source: anytype) GroupSource(@TypeOf(source), P, Q) {
-    const nested_region = sources_mod.getSourceRegion(source);
+    const nested_region = source.region;
 
     // The grouped region is downscaled
     const grouped_region = nested_region.downscaled(P, Q);
@@ -108,14 +102,10 @@ pub fn UngroupSource(comptime GroupedSource: type, comptime P: comptime_int, com
         grouped: GroupedSource,
         region: Region,
 
-        const Self = @This();
-
         /// Number of elements processed per evalAt call
         pub const vector_length = vec_len;
 
-        pub fn getRegion(self: Self) Region {
-            return self.region;
-        }
+        const Self = @This();
 
         /// Evaluate at an ungrouped position
         pub inline fn evalAt(self: Self, x: i32, y: i32) VecT {
@@ -138,7 +128,7 @@ pub fn UngroupSource(comptime GroupedSource: type, comptime P: comptime_int, com
 /// Ungroup a grouped source expression back to individual pixels.
 /// The output region is upscaled by P horizontally and Q vertically.
 pub fn ungroup(comptime P: comptime_int, comptime Q: comptime_int, source: anytype) UngroupSource(@TypeOf(source), P, Q) {
-    const grouped_region = sources_mod.getSourceRegion(source);
+    const grouped_region = source.region;
 
     // The ungrouped region is upscaled
     const ungrouped_region = grouped_region.upscaled(P, Q);
@@ -160,8 +150,6 @@ pub fn GroupDest(comptime NestedDest: type, comptime P: comptime_int, comptime Q
         nested: NestedDest,
         region: Region,
 
-        const Self = @This();
-
         /// The group dimensions
         pub const group_width = P;
         pub const group_height = Q;
@@ -170,9 +158,7 @@ pub fn GroupDest(comptime NestedDest: type, comptime P: comptime_int, comptime Q
         /// Writes are idempotent if the nested destination supports overlapping writes.
         pub const supports_overlapping_writes = @hasDecl(NestedDest, "supports_overlapping_writes") and NestedDest.supports_overlapping_writes;
 
-        pub fn getRegion(self: Self) Region {
-            return self.region;
-        }
+        const Self = @This();
 
         /// Write values to a grouped position
         /// values should be a tuple of PxQ vectors
@@ -216,7 +202,7 @@ pub fn GroupDest(comptime NestedDest: type, comptime P: comptime_int, comptime Q
 /// Group a destination expression, treating PxQ blocks as single output pixels.
 /// The input region is downscaled by P horizontally and Q vertically.
 pub fn groupDest(comptime P: comptime_int, comptime Q: comptime_int, dest: anytype) GroupDest(@TypeOf(dest), P, Q) {
-    const nested_region = sources_mod.getSourceRegion(dest);
+    const nested_region = dest.region;
 
     // The grouped region is downscaled
     const grouped_region = nested_region.downscaled(P, Q);
@@ -302,5 +288,5 @@ pub fn GroupAccessor(comptime SrcType: type, comptime VecT: type, comptime P: co
 
 /// Helper to detect if a type is a GroupSource
 pub fn isGroupSourceType(comptime T: type) bool {
-    return sources_mod.hasSourceTag(T, .group);
+    return sources.hasSourceTag(T, .group);
 }

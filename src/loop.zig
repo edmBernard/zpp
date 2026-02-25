@@ -7,14 +7,11 @@
 //! - Loop, Generate, Process: main API functions
 
 const std = @import("std");
-const region_mod = @import("region.zig");
-const padding_mod = @import("padding.zig");
-const zip_mod = @import("zip.zig");
-const group_mod = @import("group.zig");
-const sources_mod = @import("sources.zig");
-
-const Region = region_mod.Region;
-const Margin = region_mod.Margin;
+const sources = @import("sources.zig");
+const zip = @import("zip.zig");
+const group = @import("group.zig");
+const Region = @import("region.zig").Region;
+const Margin = @import("region.zig").Margin;
 
 // ============================================================================
 // MARK: Loop Options
@@ -23,7 +20,7 @@ const Margin = region_mod.Margin;
 /// Options for Loop operations.
 pub const LoopOptions = struct {
     coord_type: ?type = null,
-    margin: Margin = .{ .top = 0, .left = 0, .bottom = 0, .right = 0 },
+    margin: Margin = .{},
 };
 
 // ============================================================================
@@ -32,12 +29,12 @@ pub const LoopOptions = struct {
 
 /// Helper to detect if a type is a ZipSource
 pub fn isZipSourceType(comptime T: type) bool {
-    return zip_mod.isZipSourceType(T);
+    return zip.isZipSourceType(T);
 }
 
 /// Helper to detect if a type is a GroupSource
 pub fn isGroupSourceType(comptime T: type) bool {
-    return group_mod.isGroupSourceType(T);
+    return group.isGroupSourceType(T);
 }
 
 /// Extract the inner vector type from a type.
@@ -109,8 +106,6 @@ pub fn GeneratorResult(
     return struct {
         context: ContextType,
 
-        const Self = @This();
-
         /// The output type of this generator (e.g., VecF32 or [3]VecF32)
         pub const OutputType = ProcessReturnType(process_fn);
 
@@ -118,6 +113,7 @@ pub fn GeneratorResult(
         pub const vector_length = vec_len;
 
         const iota = std.simd.iota(@typeInfo(CoordT).vector.child, vec_len);
+        const Self = @This();
 
         pub inline fn evalAt(self: Self, x: i32, y: i32) OutputType {
             const x_vec: CoordT = iota + castScalarCoordToVector(CoordT, x);
@@ -223,17 +219,17 @@ pub fn LoopResult(
 
     // VecT is the base vector type for the accessor
     const AccessorType = if (comptime is_zip_source)
-        zip_mod.ZipAccessor(SourceType, VecT)
+        zip.ZipAccessor(SourceType, VecT)
     else if (comptime is_group_source)
-        group_mod.GroupAccessor(SourceType, VecT, SourceType.group_width, SourceType.group_height)
+        group.GroupAccessor(SourceType, VecT, SourceType.group_width, SourceType.group_height)
     else
         InputAccessor(SourceType, VecT);
 
     // Unchecked accessor for interior fast path (only for simple sources, not zip/group)
     const UncheckedAccessorType = if (comptime is_zip_source)
-        zip_mod.ZipAccessor(SourceType, VecT)
+        zip.ZipAccessor(SourceType, VecT)
     else if (comptime is_group_source)
-        group_mod.GroupAccessor(SourceType, VecT, SourceType.group_width, SourceType.group_height)
+        group.GroupAccessor(SourceType, VecT, SourceType.group_width, SourceType.group_height)
     else
         UncheckedInputAccessor(SourceType, VecT);
 
@@ -265,9 +261,9 @@ pub fn LoopResult(
 
         const Self = @This();
 
-        /// Evaluate at a specific position
-        pub inline fn evalAt(self: Self, x: i32, y: i32) ReturnType {
-            const accessor = AccessorType{
+        /// Shared evaluation logic parameterized by accessor type.
+        inline fn evalWith(self: Self, comptime Accessor: type, x: i32, y: i32) ReturnType {
+            const accessor = Accessor{
                 .source = self.source,
                 .current_x = x,
                 .current_y = y,
@@ -285,6 +281,11 @@ pub fn LoopResult(
             }
         }
 
+        /// Evaluate at a specific position
+        pub inline fn evalAt(self: Self, x: i32, y: i32) ReturnType {
+            return self.evalWith(AccessorType, x, y);
+        }
+
         /// Evaluate at a specific position without bounds checking.
         /// Caller MUST guarantee that all accessed positions (including margin offsets)
         /// are within the source's data region.
@@ -292,22 +293,7 @@ pub fn LoopResult(
             if (comptime !source_has_unchecked) {
                 return self.evalAt(x, y);
             }
-            const accessor = UncheckedAccessorType{
-                .source = self.source,
-                .current_x = x,
-                .current_y = y,
-            };
-
-            if (comptime has_coords) {
-                const CoordT = opts.coord_type.?;
-                const CoordElemT = @typeInfo(CoordT).vector.child;
-                const iota = std.simd.iota(CoordElemT, vec_len);
-                const x_coords: CoordT = iota + castScalarCoordToVector(CoordT, x);
-                const y_coords: CoordT = castScalarCoordToVector(CoordT, y);
-                return process_fn(self.context, accessor, x_coords, y_coords);
-            } else {
-                return process_fn(self.context, accessor);
-            }
+            return self.evalWith(UncheckedAccessorType, x, y);
         }
 
         /// Returns the region where evalAtUnchecked can be safely called.
@@ -336,10 +322,6 @@ pub fn LoopResult(
                 @intCast(opts.margin.bottom),
             );
         }
-
-        pub fn getRegion(self: Self) Region {
-            return self.region;
-        }
     };
 }
 
@@ -351,11 +333,11 @@ pub fn loop(
     context: anytype,
     comptime process_fn: anytype,
 ) LoopResult(VecT, @TypeOf(source), @TypeOf(context), process_fn, opts) {
-    comptime sources_mod.assertIsSource(@TypeOf(source));
+    comptime sources.assertIsSource(@TypeOf(source));
     return .{
         .source = source,
         .context = context,
-        .region = sources_mod.getSourceRegion(source),
+        .region = source.region,
     };
 }
 
@@ -372,7 +354,7 @@ fn getCompatibleVectorLen(comptime SourceType: type, comptime DestType: type) co
 }
 
 /// Get vector length from a source type.
-const getSourceVecLen = zip_mod.getSourceVecLen;
+const getSourceVecLen = zip.getSourceVecLen;
 
 /// Execute the processing pipeline and write results to output.
 /// Supports both single-channel and multi-channel sources.
@@ -386,8 +368,8 @@ const getSourceVecLen = zip_mod.getSourceVecLen;
 pub fn process(source: anytype, dest: anytype) void {
     const SourceType = @TypeOf(source);
     const DestType = @TypeOf(dest);
-    comptime sources_mod.assertIsSource(SourceType);
-    comptime sources_mod.assertIsDest(DestType);
+    comptime sources.assertIsSource(SourceType);
+    comptime sources.assertIsDest(DestType);
 
     const region = dest.region;
 
@@ -415,8 +397,8 @@ pub fn process(source: anytype, dest: anytype) void {
     processStandard(SourceType, DestType, source, dest, region, vec_len, supports_overlapping_writes);
 }
 
-const evalSourceChecked = sources_mod.evalSourceChecked;
-const evalSourceUnchecked = sources_mod.evalSourceUnchecked;
+const evalSourceChecked = sources.evalSourceChecked;
+const evalSourceUnchecked = sources.evalSourceUnchecked;
 
 /// Standard processing path without split iteration.
 fn processStandard(

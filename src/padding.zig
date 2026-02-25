@@ -1,8 +1,6 @@
 //! Padding policies and loop options for pixel processing.
 
-const region_mod = @import("region.zig");
-const Region = region_mod.Region;
-const Margin = region_mod.Margin;
+const Region = @import("region.zig").Region;
 
 // ============================================================================
 // MARK: Padding Policies

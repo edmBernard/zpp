@@ -1,11 +1,10 @@
 //! Input and Output source/destination types for pixel processing.
 
 const std = @import("std");
-const region_mod = @import("region.zig");
-const padding_mod = @import("padding.zig");
+const Region = @import("region.zig").Region;
+const padding = @import("padding.zig");
 
-const Region = region_mod.Region;
-pub const RepeatEdgePadding = padding_mod.RepeatEdgePadding;
+pub const RepeatEdgePadding = padding.RepeatEdgePadding;
 
 // ============================================================================
 // MARK: Source Tags
@@ -40,17 +39,32 @@ pub fn hasDestTag(comptime T: type, comptime tag: DestTag) bool {
 }
 
 // ============================================================================
+// MARK: Source Kind
+// ============================================================================
+
+/// Discriminates the kind of source interface a type implements.
+/// Use with `switch` for clean comptime dispatch instead of chained @hasDecl checks.
+pub fn SourceKind(comptime T: type) enum { eval, read } {
+    if (@hasDecl(T, "evalAt")) return .eval;
+    if (@hasDecl(T, "readVec")) return .read;
+    @compileError(@typeName(T) ++ " does not satisfy the Source interface: must implement evalAt() or readVec()");
+}
+
+/// Discriminates checked vs unchecked evaluation capability.
+pub fn UncheckedSourceKind(comptime T: type) enum { eval, read } {
+    if (@hasDecl(T, "evalAtUnchecked")) return .eval;
+    if (@hasDecl(T, "readVecUnchecked")) return .read;
+    @compileError(@typeName(T) ++ " does not support unchecked access: must implement evalAtUnchecked() or readVecUnchecked()");
+}
+
+// ============================================================================
 // MARK: Interface Validation
 // ============================================================================
 
 /// Validate that a type satisfies the Source interface.
 /// A Source must provide either `evalAt` or `readVec` for reading data.
 pub fn assertIsSource(comptime T: type) void {
-    const has_eval = @hasDecl(T, "evalAt");
-    const has_read = @hasDecl(T, "readVec");
-    if (!has_eval and !has_read) {
-        @compileError(@typeName(T) ++ " does not satisfy the Source interface: must implement evalAt() or readVec()");
-    }
+    _ = SourceKind(T);
 }
 
 /// Validate that a type satisfies the Destination interface.
@@ -72,18 +86,6 @@ pub fn assertIsDest(comptime T: type) void {
 // MARK: Source Helpers
 // ============================================================================
 
-/// Get the region from any source (has getRegion method or region field).
-pub fn getSourceRegion(source: anytype) Region {
-    const T = @TypeOf(source);
-    if (@hasDecl(T, "getRegion")) {
-        return source.getRegion();
-    } else if (@hasField(T, "region")) {
-        return source.region;
-    } else {
-        @compileError("Source must have a region field or getRegion method");
-    }
-}
-
 /// Return type for evalSourceChecked/evalSourceUnchecked.
 fn EvalReturnType(comptime SourceType: type, comptime vec_len: comptime_int, comptime decl_name: []const u8) type {
     if (@hasDecl(SourceType, decl_name)) {
@@ -96,24 +98,18 @@ fn EvalReturnType(comptime SourceType: type, comptime vec_len: comptime_int, com
 
 /// Evaluate a source at position (x, y) using checked reads.
 pub inline fn evalSourceChecked(comptime SourceType: type, source: SourceType, comptime vec_len: comptime_int, x: i32, y: i32) EvalReturnType(SourceType, vec_len, "evalAt") {
-    if (@hasDecl(SourceType, "evalAt")) {
-        return source.evalAt(x, y);
-    } else if (@hasDecl(SourceType, "readVec")) {
-        return source.readVec(@Vector(vec_len, SourceType.OutputScalarType), x, y);
-    } else {
-        @compileError("Source must have evalAt or readVec method");
-    }
+    return switch (comptime SourceKind(SourceType)) {
+        .eval => source.evalAt(x, y),
+        .read => source.readVec(@Vector(vec_len, SourceType.OutputScalarType), x, y),
+    };
 }
 
 /// Evaluate a source at position (x, y) using unchecked reads (no bounds checking).
 pub inline fn evalSourceUnchecked(comptime SourceType: type, source: SourceType, comptime vec_len: comptime_int, x: i32, y: i32) EvalReturnType(SourceType, vec_len, "evalAtUnchecked") {
-    if (@hasDecl(SourceType, "evalAtUnchecked")) {
-        return source.evalAtUnchecked(x, y);
-    } else if (@hasDecl(SourceType, "readVecUnchecked")) {
-        return source.readVecUnchecked(@Vector(vec_len, SourceType.OutputScalarType), x, y);
-    } else {
-        @compileError("Source must have evalAtUnchecked or readVecUnchecked for split iteration");
-    }
+    return switch (comptime UncheckedSourceKind(SourceType)) {
+        .eval => source.evalAtUnchecked(x, y),
+        .read => source.readVecUnchecked(@Vector(vec_len, SourceType.OutputScalarType), x, y),
+    };
 }
 
 // ============================================================================

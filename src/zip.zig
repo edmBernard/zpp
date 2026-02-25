@@ -1,10 +1,8 @@
 //! Zip and Unzip support for combining multiple source/destination expressions.
 
 const std = @import("std");
-const region_mod = @import("region.zig");
-const sources_mod = @import("sources.zig");
-
-const Region = region_mod.Region;
+const sources = @import("sources.zig");
+const Region = @import("region.zig").Region;
 
 // ============================================================================
 // MARK: Helper Types
@@ -38,12 +36,12 @@ pub fn tupleLen(comptime TupleType: type) comptime_int {
 
 /// Helper to detect if a type is a ZipSource
 pub fn isZipSourceType(comptime T: type) bool {
-    return sources_mod.hasSourceTag(T, .zip);
+    return sources.hasSourceTag(T, .zip);
 }
 
 /// Check if a type is a ZipDest
 pub fn isZipDestType(comptime T: type) bool {
-    return sources_mod.hasDestTag(T, .zip);
+    return sources.hasDestTag(T, .zip);
 }
 
 // ============================================================================
@@ -89,9 +87,7 @@ pub fn ZipSource(comptime source_count: comptime_int, comptime SourceTypes: [sou
         sources: SourceTuple(&SourceTypes),
         region: Region,
 
-        const Self = @This();
-
-        pub const source_tag = sources_mod.SourceTag.zip;
+        pub const source_tag = sources.SourceTag.zip;
 
         /// Number of sources in this zip
         pub const count = source_count;
@@ -105,9 +101,7 @@ pub fn ZipSource(comptime source_count: comptime_int, comptime SourceTypes: [sou
         /// The vector type used by this ZipSource
         pub const VectorType = VecT;
 
-        pub fn getRegion(self: Self) Region {
-            return self.region;
-        }
+        const Self = @This();
 
         /// Evaluate at a specific position - returns a tuple of values from all sources
         /// This allows ZipSource to be used directly with Process (without a kernel)
@@ -115,7 +109,7 @@ pub fn ZipSource(comptime source_count: comptime_int, comptime SourceTypes: [sou
             var result: ResultTuple = undefined;
 
             inline for (0..source_count) |i| {
-                result[i] = sources_mod.evalSourceChecked(SourceTypes[i], self.sources[i], vec_len, x, y);
+                result[i] = sources.evalSourceChecked(SourceTypes[i], self.sources[i], vec_len, x, y);
             }
 
             return result;
@@ -125,8 +119,8 @@ pub fn ZipSource(comptime source_count: comptime_int, comptime SourceTypes: [sou
 
 /// Zip any number of source expressions together.
 /// The kernel will receive an array [N]VecT that can be unpacked: `const [a, b, c] = in.get();`
-pub fn zip(sources: anytype) ZipSource(tupleLen(@TypeOf(sources)), sourceTypesFromTuple(@TypeOf(sources))) {
-    const SourcesTuple = @TypeOf(sources);
+pub fn zip(input_sources: anytype) ZipSource(tupleLen(@TypeOf(input_sources)), sourceTypesFromTuple(@TypeOf(input_sources))) {
+    const SourcesTuple = @TypeOf(input_sources);
     const type_info = @typeInfo(SourcesTuple);
 
     if (type_info != .@"struct" or !type_info.@"struct".is_tuple) {
@@ -139,14 +133,13 @@ pub fn zip(sources: anytype) ZipSource(tupleLen(@TypeOf(sources)), sourceTypesFr
     }
 
     // Compute intersection of all regions
-    var combined_region = sources_mod.getSourceRegion(sources[0]);
+    var combined_region = input_sources[0].region;
     inline for (1..field_count) |i| {
-        const region_i = sources_mod.getSourceRegion(sources[i]);
-        combined_region = combined_region.intersection(region_i);
+        combined_region = combined_region.intersection(input_sources[i].region);
     }
 
     return .{
-        .sources = sources,
+        .sources = input_sources,
         .region = combined_region,
     };
 }
@@ -161,9 +154,9 @@ pub fn ZipDest(comptime dest_count: comptime_int, comptime DestTypes: [dest_coun
         dests: SourceTuple(&DestTypes),
         region: Region,
 
-        const Self = @This();
-        pub const dest_tag = sources_mod.DestTag.zip;
+        pub const dest_tag = sources.DestTag.zip;
         pub const count = dest_count;
+        const Self = @This();
 
         pub fn write(self: Self, x: u32, y: u32, values: anytype) void {
             inline for (0..dest_count) |i| {
@@ -227,23 +220,19 @@ pub fn UnzipSource(comptime ZippedSource: type, comptime channel: usize) type {
         zipped: ZippedSource,
         region: Region,
 
-        const Self = @This();
-
         /// Number of elements processed per evalAt call
         pub const vector_length = vec_len;
+
+        const Self = @This();
 
         /// Get the nested source for this channel
         pub fn getNestedSource(self: Self) NestedSourceType {
             return self.zipped.sources[channel];
         }
 
-        pub fn getRegion(self: Self) Region {
-            return self.region;
-        }
-
         /// For expression tree chaining - evaluate at position
         pub inline fn evalAt(self: Self, x: i32, y: i32) VecT {
-            return sources_mod.evalSourceChecked(NestedSourceType, self.getNestedSource(), vec_len, x, y);
+            return sources.evalSourceChecked(NestedSourceType, self.getNestedSource(), vec_len, x, y);
         }
     };
 }
@@ -266,16 +255,9 @@ pub fn unzip(zipped: anytype) UnzipResultType(@TypeOf(zipped)) {
     const ZippedType = @TypeOf(zipped);
     const source_count = ZippedType.count;
 
-    const region = if (@hasDecl(ZippedType, "getRegion"))
-        zipped.getRegion()
-    else if (@hasField(ZippedType, "region"))
-        zipped.region
-    else
-        @compileError("Zipped source must have a region");
-
     var result: UnzipResultType(ZippedType) = undefined;
     inline for (0..source_count) |i| {
-        result[i] = .{ .zipped = zipped, .region = region };
+        result[i] = .{ .zipped = zipped, .region = zipped.region };
     }
     return result;
 }
@@ -290,24 +272,24 @@ pub fn ZipAccessor(comptime SrcType: type, comptime VecT: type) type {
     const source_count = SrcType.count;
     const SourceTypes = @typeInfo(SrcType.Sources).@"struct".fields;
     const ResultTuple = VecTuple(source_count, VecT);
-    const loop_mod = @import("loop.zig");
+    const InputAccessor = @import("loop.zig").InputAccessor;
 
     return struct {
         source: SrcType,
         current_x: i32,
         current_y: i32,
 
-        const Self = @This();
-
         /// Number of zipped sources
         pub const num_sources = source_count;
+
+        const Self = @This();
 
         /// Get values at offset as a tuple
         pub inline fn getAt(self: Self, dx: i32, dy: i32) ResultTuple {
             var result: ResultTuple = undefined;
             inline for (0..source_count) |i| {
                 const SourceT = SourceTypes[i].type;
-                const Accessor = loop_mod.InputAccessor(SourceT, VecT);
+                const Accessor = InputAccessor(SourceT, VecT);
                 const accessor = Accessor{
                     .source = self.source.sources[i],
                     .current_x = self.current_x,

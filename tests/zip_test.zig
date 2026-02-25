@@ -350,8 +350,8 @@ test "Zip: unzip preserves region dimensions" {
 
     // Unzip and verify each source preserves the zipped region
     const unzipped = zpp.unzip(zipped);
-    const unzipped_0_region = unzipped[0].getRegion();
-    const unzipped_1_region = unzipped[1].getRegion();
+    const unzipped_0_region = unzipped[0].region;
+    const unzipped_1_region = unzipped[1].region;
 
     try std.testing.expectEqual(zipped_region.x, unzipped_0_region.x);
     try std.testing.expectEqual(zipped_region.y, unzipped_0_region.y);

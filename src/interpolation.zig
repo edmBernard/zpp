@@ -1,10 +1,8 @@
 //! Interpolation support for pixel sampling at non-integer coordinates.
 
 const std = @import("std");
-const region_mod = @import("region.zig");
-const sources_mod = @import("sources.zig");
-
-const Region = region_mod.Region;
+const sources = @import("sources.zig");
+const Region = @import("region.zig").Region;
 
 // ============================================================================
 // MARK: Interpolation Method
@@ -141,27 +139,10 @@ pub fn PixelInterpolator(comptime SourceType: type, comptime VecT: type, comptim
 
         /// Read a single pixel at integer coordinates, with padding
         inline fn readPixel(self: Self, xi: i32, yi: i32) ElemT {
-            // Use source's read method if available (handles padding)
-            if (@hasDecl(SourceType, "read")) {
-                return self.source.read(xi, yi);
-            } else if (@hasDecl(SourceType, "evalAt")) {
-                // For LoopResult sources, evaluate and take first element
-                const vec = self.source.evalAt(xi, yi);
-                return vec[0];
-            } else {
-                // Direct data access with bounds check
-                if (xi >= self.region.x and xi < self.region.stopX() and
-                    yi >= self.region.y and yi < self.region.stopY())
-                {
-                    const ux: u32 = @intCast(xi - self.region.x);
-                    const uy: u32 = @intCast(yi - self.region.y);
-                    const idx = uy * self.region.width + ux;
-                    if (idx < self.source.data.len) {
-                        return self.source.data[idx];
-                    }
-                }
-                return 0;
-            }
+            return switch (comptime sources.SourceKind(SourceType)) {
+                .eval => self.source.evalAt(xi, yi)[0],
+                .read => self.source.read(xi, yi),
+            };
         }
     };
 }
@@ -186,17 +167,17 @@ pub fn InterpLoopResult(
         context: ContextType,
         region: Region,
 
-        const Self = @This();
-
         /// Number of elements processed per evalAt call
         pub const vector_length = vec_len;
+
+        const Self = @This();
 
         /// Evaluate at a specific position - calls kernel with interpolator and coords
         pub inline fn evalAt(self: Self, x: i32, y: i32) VecT {
             // Create interpolator for the source
             const interpolator = InterpolatorType{
                 .source = self.source,
-                .region = self.getSourceRegion(),
+                .region = self.source.region,
             };
 
             // Build coordinate vectors for output position
@@ -206,22 +187,6 @@ pub fn InterpLoopResult(
 
             // Call kernel with interpolator and output coordinates
             return process_fn(self.context, interpolator, x_vec, y_vec);
-        }
-
-        fn getSourceRegion(self: Self) Region {
-            const ST = @TypeOf(self.source);
-            if (@hasDecl(ST, "getRegion")) {
-                return self.source.getRegion();
-            } else if (@hasField(ST, "region")) {
-                return self.source.region;
-            } else {
-                // Fallback for raw data sources without their own region
-                return self.region;
-            }
-        }
-
-        pub fn getRegion(self: Self) Region {
-            return self.region;
         }
     };
 }
@@ -261,7 +226,7 @@ pub fn interpLoop(
     context: anytype,
     comptime process_fn: anytype,
 ) InterpLoopResult(VecT, @TypeOf(source), @TypeOf(context), process_fn, method) {
-    comptime sources_mod.assertIsSource(@TypeOf(source));
+    comptime sources.assertIsSource(@TypeOf(source));
     return .{
         .source = source,
         .context = context,

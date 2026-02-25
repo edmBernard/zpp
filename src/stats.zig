@@ -1,9 +1,7 @@
 //! Stats destination for computing statistics without writing to memory.
 
 const std = @import("std");
-const region_mod = @import("region.zig");
-
-const Region = region_mod.Region;
+const Region = @import("region.zig").Region;
 
 // ============================================================================
 // MARK: Stats Destination
