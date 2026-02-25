@@ -134,6 +134,99 @@ test "Loop: expression tree chains two kernels across types" {
     }
 }
 
+// MARK: Loop: expression tree chains two kernels with margin (V then H)
+test "Loop: expression tree chains two kernels with margin (V then H)" {
+    const width = 12;
+    const height = 4;
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = width, .height = height };
+
+    inline for ([_]type{ f32x4, u16x4 }) |LoopType| {
+        const ScalarType = @typeInfo(LoopType).vector.child;
+
+        // 2x4 input
+        var input_data: [width * height]ScalarType = undefined;
+        th.fillRamp(ScalarType, &input_data, 1, 1);
+        var output_data = [_]ScalarType{0} ** (width * height);
+
+        const source = zpp.makeSource(ScalarType, &input_data, region.width, region);
+        const destination = zpp.makeDest(ScalarType, &output_data, region.width, region);
+
+        const vertical_kernel = struct {
+            fn process(ctx: anytype, in: anytype) LoopType {
+                _ = ctx;
+                return (in.getAt(0, -1) + in.get() + in.getAt(0, 1));
+            }
+        };
+
+        const horizontal_kernel = struct {
+            fn process(ctx: anytype, in: anytype) LoopType {
+                _ = ctx;
+                return (in.getAt(-1, 0) + in.get() + in.getAt(1, 0)) + th.splatWithCast(LoopType, 10);
+            }
+        };
+
+        const step1 = zpp.loop(LoopType, .{ .margin = .vertical(1) }, source, .{}, vertical_kernel.process);
+        const step2 = zpp.loop(LoopType, .{ .margin = .horizontal(1) }, step1, .{}, horizontal_kernel.process);
+        zpp.process(step2, destination);
+
+        // output = input * 2 + 10
+        const expected_data: [width * height]ScalarType = .{
+            58,  64,  73,  82,  91,  100, 109, 118, 127, 136, 145, 151,
+            130, 136, 145, 154, 163, 172, 181, 190, 199, 208, 217, 223,
+            238, 244, 253, 262, 271, 280, 289, 298, 307, 316, 325, 331,
+            310, 316, 325, 334, 343, 352, 361, 370, 379, 388, 397, 403,
+        };
+        try std.testing.expectEqual(expected_data, output_data);
+    }
+}
+
+// MARK: Loop: expression tree chains two kernels with margin (H then V)
+test "Loop: expression tree chains two kernels with margin (H then V)" {
+    // Allow to catch interior region propagation between kernels
+    const width = 12;
+    const height = 4;
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = width, .height = height };
+
+    inline for ([_]type{ f32x4, u16x4 }) |LoopType| {
+        const ScalarType = @typeInfo(LoopType).vector.child;
+
+        // 2x4 input
+        var input_data: [width * height]ScalarType = undefined;
+        th.fillRamp(ScalarType, &input_data, 1, 1);
+        var output_data = [_]ScalarType{0} ** (width * height);
+
+        const source = zpp.makeSource(ScalarType, &input_data, region.width, region);
+        const destination = zpp.makeDest(ScalarType, &output_data, region.width, region);
+
+        const vertical_kernel = struct {
+            fn process(ctx: anytype, in: anytype) LoopType {
+                _ = ctx;
+                return (in.getAt(0, -1) + in.get() + in.getAt(0, 1));
+            }
+        };
+
+        const horizontal_kernel = struct {
+            fn process(ctx: anytype, in: anytype) LoopType {
+                _ = ctx;
+                return (in.getAt(-1, 0) + in.get() + in.getAt(1, 0)) + th.splatWithCast(LoopType, 10);
+            }
+        };
+
+        const step1 = zpp.loop(LoopType, .{ .margin = .horizontal(1) }, source, .{}, horizontal_kernel.process);
+        const step2 = zpp.loop(LoopType, .{ .margin = .vertical(1) }, step1, .{}, vertical_kernel.process);
+        zpp.process(step2, destination);
+
+        // output = input * 2 + 10
+        const expected_data: [width * height]ScalarType = .{
+            78,  84,  93,  102, 111, 120, 129, 138, 147, 156, 165, 171,
+            150, 156, 165, 174, 183, 192, 201, 210, 219, 228, 237, 243,
+            258, 264, 273, 282, 291, 300, 309, 318, 327, 336, 345, 351,
+            330, 336, 345, 354, 363, 372, 381, 390, 399, 408, 417, 423,
+        };
+        try std.testing.expectEqual(expected_data, output_data);
+    }
+}
+
 // MARK: Loop: non-origin region preserves data
 test "Loop: non-origin region preserves data" {
     inline for (AllTypes) |LoopType| {

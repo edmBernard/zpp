@@ -297,9 +297,8 @@ pub fn LoopResult(
         }
 
         /// Returns the region where evalAtUnchecked can be safely called.
-        /// This is the source region deflated by the kernel's margin and vec_len.
-        /// For position x in this region, all reads x-margin.left .. x+margin.right+vec_len-1
-        /// are guaranteed in-bounds of the source data.
+        /// For position x in this region, all reads through the full source chain
+        /// are guaranteed in-bounds.
         /// Returns an empty region if the margin is zero (no benefit from split iteration)
         /// or if the source doesn't support unchecked access.
         pub fn getInteriorRegion(self: Self) Region {
@@ -307,13 +306,26 @@ pub fn LoopResult(
                 // No unchecked path available or no margin → no benefit from split
                 return .{ .width = 0, .height = 0 };
             }
-            // The source region is where data is available
+
+            // If the source is a chained LoopResult with its own interior region,
+            // use that as the base. It already accounts for vec_len and deeper margins.
+            // We only need to deflate by our own kernel's margin offsets.
+            if (comptime @hasDecl(SourceType, "getInteriorRegion")) {
+                const src_interior = self.source.getInteriorRegion();
+                if (src_interior.width == 0 or src_interior.height == 0) {
+                    return .{ .width = 0, .height = 0 };
+                }
+                return src_interior.deflated(
+                    @intCast(opts.margin.left),
+                    @intCast(opts.margin.top),
+                    @intCast(opts.margin.right),
+                    @intCast(opts.margin.bottom),
+                );
+            }
+
+            // Leaf source (InputSource): deflate self.region by margin + vec_len.
+            // Right side needs margin.right + vec_len - 1 for the vector read width.
             const src_region = self.region;
-            // Deflate by margin to get where all margin reads are in-bounds
-            // Left: need margin.left pixels to the left
-            // Right: need margin.right + vec_len - 1 pixels to the right (for the vector read)
-            // Top: need margin.top rows above
-            // Bottom: need margin.bottom rows below
             const right: i32 = @intCast(opts.margin.right);
             return src_region.deflated(
                 @intCast(opts.margin.left),
