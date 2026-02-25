@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const region_mod = @import("region.zig");
+const sources_mod = @import("sources.zig");
 
 const Region = region_mod.Region;
 
@@ -260,6 +261,7 @@ pub fn interpLoop(
     context: anytype,
     comptime process_fn: anytype,
 ) InterpLoopResult(VecT, @TypeOf(source), @TypeOf(context), process_fn, method) {
+    comptime sources_mod.assertIsSource(@TypeOf(source));
     return .{
         .source = source,
         .context = context,

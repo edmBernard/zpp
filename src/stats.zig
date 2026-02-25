@@ -18,7 +18,7 @@ const Region = region_mod.Region;
 pub fn StatsDest(
     comptime VecT: type,
     comptime ContextType: type,
-    comptime stats_fn: anytype,
+    comptime accumulate_fn: anytype,
     comptime has_coords: bool,
 ) type {
     const vec_len = @typeInfo(VecT).vector.len;
@@ -27,38 +27,41 @@ pub fn StatsDest(
         context: *ContextType,
         region: Region,
 
-        pub const InputType = @typeInfo(VecT).vector.child;
-        pub const InputScalarType = InputType;
+        pub const InputScalarType = @typeInfo(VecT).vector.child;
         const Self = @This();
 
-        /// "Write" a SIMD batch by calling the stats function
-        /// This doesn't actually write to memory - it calls the user's stats kernel
+        /// Calls the user's stats kernel on a simd batch.
         pub fn write(self: Self, x: u32, y: u32, values: VecT) void {
             if (has_coords) {
-                // Build coordinate vectors
                 const iota = std.simd.iota(i32, vec_len);
-                const x_vec: @Vector(vec_len, i32) = iota + @as(@Vector(vec_len, i32), @splat(@as(i32, @intCast(x)) + self.region.x));
-                const y_vec: @Vector(vec_len, i32) = @splat(@as(i32, @intCast(y)) + self.region.y);
-                stats_fn(self.context, values, x_vec, y_vec);
+                const xi: i32 = @intCast(x);
+                const yi: i32 = @intCast(y);
+                const x_base = self.region.x + xi;
+                const y_base = self.region.y + yi;
+                const x_vec: @Vector(vec_len, i32) = iota + @as(@Vector(vec_len, i32), @splat(x_base));
+                const y_vec: @Vector(vec_len, i32) = @splat(y_base);
+                accumulate_fn(self.context, values, x_vec, y_vec);
             } else {
-                stats_fn(self.context, values);
+                accumulate_fn(self.context, values);
             }
         }
 
-        /// "Write" a single scalar value by calling the stats function
-        /// Only processes lane 0 to avoid overcounting in remainder handling
-        pub fn writeScalar(self: Self, x: u32, y: u32, value: InputType) void {
-            // Create a vector with only lane 0 populated, others zeroed
-            // This ensures @reduce operations only count the valid scalar value
+        /// "Write" a single scalar value by calling the stats function.
+        /// Only processes lane 0 to avoid overcounting in remainder handling.
+        pub fn writeScalar(self: Self, x: u32, y: u32, value: InputScalarType) void {
             var single: VecT = @splat(0);
             single[0] = value;
 
             if (has_coords) {
-                const x_vec: @Vector(vec_len, i32) = @splat(@as(i32, @intCast(x)) + self.region.x);
-                const y_vec: @Vector(vec_len, i32) = @splat(@as(i32, @intCast(y)) + self.region.y);
-                stats_fn(self.context, single, x_vec, y_vec);
+                const xi: i32 = @intCast(x);
+                const yi: i32 = @intCast(y);
+                const x_base = self.region.x + xi;
+                const y_base = self.region.y + yi;
+                const x_vec: @Vector(vec_len, i32) = @splat(x_base);
+                const y_vec: @Vector(vec_len, i32) = @splat(y_base);
+                accumulate_fn(self.context, single, x_vec, y_vec);
             } else {
-                stats_fn(self.context, single);
+                accumulate_fn(self.context, single);
             }
         }
     };

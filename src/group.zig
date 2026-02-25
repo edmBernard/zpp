@@ -31,7 +31,7 @@ pub fn GroupSource(comptime NestedSource: type, comptime P: comptime_int, compti
 
         const Self = @This();
 
-        pub const is_group_source = true;
+        pub const source_tag = sources_mod.SourceTag.group;
 
         /// The group dimensions
         pub const group_width = P;
@@ -302,5 +302,5 @@ pub fn GroupAccessor(comptime SrcType: type, comptime VecT: type, comptime P: co
 
 /// Helper to detect if a type is a GroupSource
 pub fn isGroupSourceType(comptime T: type) bool {
-    return @hasDecl(T, "is_group_source");
+    return sources_mod.hasSourceTag(T, .group);
 }

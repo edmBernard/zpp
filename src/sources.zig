@@ -8,6 +8,67 @@ const Region = region_mod.Region;
 pub const RepeatEdgePadding = padding_mod.RepeatEdgePadding;
 
 // ============================================================================
+// MARK: Source Tags
+// ============================================================================
+
+/// Tag to identify composite source types.
+/// Used instead of marker booleans for type identification.
+pub const SourceTag = enum {
+    zip,
+    group,
+};
+
+/// Check if a type has a specific source tag.
+pub fn hasSourceTag(comptime T: type, comptime tag: SourceTag) bool {
+    if (@hasDecl(T, "source_tag")) {
+        return T.source_tag == tag;
+    }
+    return false;
+}
+
+/// Tag to identify composite destination types.
+pub const DestTag = enum {
+    zip,
+};
+
+/// Check if a type has a specific destination tag.
+pub fn hasDestTag(comptime T: type, comptime tag: DestTag) bool {
+    if (@hasDecl(T, "dest_tag")) {
+        return T.dest_tag == tag;
+    }
+    return false;
+}
+
+// ============================================================================
+// MARK: Interface Validation
+// ============================================================================
+
+/// Validate that a type satisfies the Source interface.
+/// A Source must provide either `evalAt` or `readVec` for reading data.
+pub fn assertIsSource(comptime T: type) void {
+    const has_eval = @hasDecl(T, "evalAt");
+    const has_read = @hasDecl(T, "readVec");
+    if (!has_eval and !has_read) {
+        @compileError(@typeName(T) ++ " does not satisfy the Source interface: must implement evalAt() or readVec()");
+    }
+}
+
+/// Validate that a type satisfies the Destination interface.
+/// A Destination must provide `write` and `writeScalar` methods,
+/// an `InputScalarType` declaration, and a `region` field.
+pub fn assertIsDest(comptime T: type) void {
+    if (!@hasDecl(T, "write")) {
+        @compileError(@typeName(T) ++ " does not satisfy the Destination interface: must implement write()");
+    }
+    if (!@hasDecl(T, "writeScalar")) {
+        @compileError(@typeName(T) ++ " does not satisfy the Destination interface: must implement writeScalar()");
+    }
+    if (!@hasField(T, "region")) {
+        @compileError(@typeName(T) ++ " does not satisfy the Destination interface: must have a region field");
+    }
+}
+
+// ============================================================================
 // MARK: Source Helpers
 // ============================================================================
 

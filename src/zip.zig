@@ -38,12 +38,12 @@ pub fn tupleLen(comptime TupleType: type) comptime_int {
 
 /// Helper to detect if a type is a ZipSource
 pub fn isZipSourceType(comptime T: type) bool {
-    return @hasDecl(T, "is_zip_source");
+    return sources_mod.hasSourceTag(T, .zip);
 }
 
 /// Check if a type is a ZipDest
 pub fn isZipDestType(comptime T: type) bool {
-    return @hasDecl(T, "is_zip_dest");
+    return sources_mod.hasDestTag(T, .zip);
 }
 
 // ============================================================================
@@ -91,7 +91,7 @@ pub fn ZipSource(comptime source_count: comptime_int, comptime SourceTypes: [sou
 
         const Self = @This();
 
-        pub const is_zip_source = true;
+        pub const source_tag = sources_mod.SourceTag.zip;
 
         /// Number of sources in this zip
         pub const count = source_count;
@@ -162,7 +162,7 @@ pub fn ZipDest(comptime dest_count: comptime_int, comptime DestTypes: [dest_coun
         region: Region,
 
         const Self = @This();
-        pub const is_zip_dest = true;
+        pub const dest_tag = sources_mod.DestTag.zip;
         pub const count = dest_count;
 
         pub fn write(self: Self, x: u32, y: u32, values: anytype) void {

@@ -47,7 +47,7 @@ test "Cache: All loop result fit in cache" {
     };
 
     var ctx = kernel.Context{};
-    const result = try zpp.cachedLoop(f32x4, .{}, 2, source, &ctx, kernel.process, std.testing.allocator);
+    const result = try zpp.cachedLoop(f32x4, .{}, 2, std.testing.allocator, source, &ctx, kernel.process);
     defer result.deinit();
     const zipped_in = zpp.zip(.{ result, result });
     const zipped_dest = zpp.zipDest(.{ destination, stats_dest });
@@ -105,7 +105,7 @@ test "Cache: Smaller cache than loop result" {
     };
 
     var ctx = kernel.Context{};
-    const result = try zpp.cachedLoop(f32x4, .{}, 1, source, &ctx, kernel.process, std.testing.allocator);
+    const result = try zpp.cachedLoop(f32x4, .{}, 1, std.testing.allocator, source, &ctx, kernel.process);
     defer result.deinit();
     const zipped_in = zpp.zip(.{ result, result });
     const zipped_dest = zpp.zipDest(.{ destination, stats_dest });

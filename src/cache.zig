@@ -10,7 +10,7 @@ const zip_mod = @import("zip.zig");
 const sources_mod = @import("sources.zig");
 
 const Region = region_mod.Region;
-const DefaultLoopOptions = loop_mod.DefaultLoopOptions;
+const LoopOptions = loop_mod.LoopOptions;
 
 // Forward declaration - these will be resolved at comptime
 // InputAccessor and ZipAccessor are imported from loop.zig and zip.zig respectively
@@ -95,9 +95,8 @@ fn RowCache(comptime T: type, comptime max_rows: usize) type {
 
         /// Get the cache slot for a given image row.
         fn getSlot(self: Self, y: i64) usize {
-            // Use positive modulo
-            const mod_y = @mod(y, @as(i64, @intCast(self.num_rows)));
-            return @intCast(mod_y);
+            const num: i64 = @intCast(self.num_rows);
+            return @intCast(@mod(y, num));
         }
 
         /// Check if row `y` is currently cached and valid.
@@ -141,21 +140,12 @@ pub fn CachedLoopResult(
     comptime VecT: type,
     comptime SrcType: type,
     comptime CtxType: type,
-    comptime process_fn: anytype,
-    comptime opts: DefaultLoopOptions,
+    comptime kernel_fn: anytype,
+    comptime opts: LoopOptions,
     comptime max_cache_rows: usize,
 ) type {
     const vec_len = @typeInfo(VecT).vector.len;
     const ElemT = @typeInfo(VecT).vector.child;
-    const has_coords = opts.coord_type != null;
-    const is_zip_source = zip_mod.isZipSourceType(SrcType);
-
-    // Import the accessor types - these need to be resolved at comptime
-    const AccessorType = if (is_zip_source)
-        zip_mod.ZipAccessor(SrcType, VecT)
-    else
-        loop_mod.InputAccessor(SrcType, VecT);
-
     const Cache = RowCache(ElemT, max_cache_rows);
 
     return struct {
@@ -167,6 +157,11 @@ pub fn CachedLoopResult(
 
         const Self = @This();
         pub const vector_length = vec_len;
+        const has_coords = opts.coord_type != null;
+        const AccessorType = if (zip_mod.isZipSourceType(SrcType))
+            zip_mod.ZipAccessor(SrcType, VecT)
+        else
+            loop_mod.InputAccessor(SrcType, VecT);
 
         /// Free cache memory and the heap allocation.
         pub fn deinit(self: Self) void {
@@ -197,7 +192,8 @@ pub fn CachedLoopResult(
 
             var x: u32 = 0;
             while (x < self.region.width) : (x += @intCast(vec_len)) {
-                const x32: i32 = @as(i32, @intCast(x)) + self.region.x;
+                const x_offset: i32 = @intCast(x);
+                const x32 = self.region.x + x_offset;
 
                 const accessor = AccessorType{
                     .source = self.source,
@@ -210,8 +206,8 @@ pub fn CachedLoopResult(
                     const iota = std.simd.iota(@typeInfo(CoordT).vector.child, vec_len);
                     const x_coords: CoordT = iota + loop_mod.castScalarCoordToVector(CoordT, x32);
                     const y_coords: CoordT = loop_mod.castScalarCoordToVector(CoordT, y32);
-                    break :blk process_fn(self.context, accessor, x_coords, y_coords);
-                } else process_fn(self.context, accessor);
+                    break :blk kernel_fn(self.context, accessor, x_coords, y_coords);
+                } else kernel_fn(self.context, accessor);
 
                 // Store result in cache
                 inline for (0..vec_len) |i| {
@@ -230,8 +226,10 @@ pub fn CachedLoopResult(
             // Read from cache
             var result: VecT = @splat(0);
             inline for (0..vec_len) |i| {
-                const px = x - self.region.x + @as(i32, @intCast(i));
-                if (px >= 0 and px < @as(i32, @intCast(self.region.width))) {
+                const offset: i32 = @intCast(i);
+                const px = x - self.region.x + offset;
+                const width: i32 = @intCast(self.region.width);
+                if (px >= 0 and px < width) {
                     const row_data = self.cache.getRowData(y);
                     result[i] = row_data[@intCast(px)];
                 }
@@ -251,13 +249,15 @@ pub fn CachedLoopResult(
 /// The cache is heap-allocated so that copies share the same underlying data.
 pub fn cachedLoop(
     comptime VecT: type,
-    comptime opts: DefaultLoopOptions,
+    comptime opts: LoopOptions,
     comptime max_cache_rows: usize,
+    allocator: std.mem.Allocator,
     source: anytype,
     context: anytype,
     comptime process_fn: anytype,
-    allocator: std.mem.Allocator,
 ) !CachedLoopResult(VecT, @TypeOf(source), @TypeOf(context), process_fn, opts, max_cache_rows) {
+    comptime sources_mod.assertIsSource(@TypeOf(source));
+
     const ElemT = @typeInfo(VecT).vector.child;
     const Cache = RowCache(ElemT, max_cache_rows);
 

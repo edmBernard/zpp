@@ -10,6 +10,7 @@
 //! would fall back to scalar gather.
 
 const region_mod = @import("region.zig");
+const sources_mod = @import("sources.zig");
 
 const Region = region_mod.Region;
 const Margin = region_mod.Margin;
@@ -128,5 +129,6 @@ fn EvalTranslatedSource(comptime SourceType: type) type {
 /// const blended = zpp.loop(f32x4, .{}, zipped, .{}, blend_kernel);
 /// ```
 pub fn translate(source: anytype, dx: i32, dy: i32) TranslatedSource(@TypeOf(source)) {
+    comptime sources_mod.assertIsSource(@TypeOf(source));
     return .{ .source = source, .dx = dx, .dy = dy };
 }

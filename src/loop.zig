@@ -20,16 +20,11 @@ const Margin = region_mod.Margin;
 // MARK: Loop Options
 // ============================================================================
 
-/// Options for Loop operations
-pub fn LoopOptions(comptime CoordType: ?type) type {
-    return struct {
-        coord_type: ?type = CoordType,
-        margin: Margin = .{},
-    };
-}
-
-/// Default loop options (no coordinates, zero margin).
-pub const DefaultLoopOptions = LoopOptions(null);
+/// Options for Loop operations.
+pub const LoopOptions = struct {
+    coord_type: ?type = null,
+    margin: Margin = .{ .top = 0, .left = 0, .bottom = 0, .right = 0 },
+};
 
 // ============================================================================
 // MARK: Helper Functions
@@ -133,15 +128,11 @@ pub fn GeneratorResult(
 }
 
 pub inline fn castScalarCoordToVector(comptime CoordT: type, value: i32) CoordT {
-    switch (@typeInfo(CoordT).vector.child) {
-        f32 => {
-            return @as(CoordT, @splat(@floatFromInt(value)));
-        },
-        u16, u8 => {
-            return @as(CoordT, @splat(@intCast(value)));
-        },
+    return switch (@typeInfo(CoordT).vector.child) {
+        f32 => @splat(@as(f32, @floatFromInt(value))),
+        u16, u8 => @splat(@intCast(value)),
         else => @compileError("castScalarCoordToVector only supports f32, u16, u8 scalars"),
-    }
+    };
 }
 
 /// Create a generator (produces values from coordinates, no input)
@@ -224,7 +215,7 @@ pub fn LoopResult(
     comptime SourceType: type,
     comptime ContextType: type,
     comptime process_fn: anytype,
-    comptime opts: DefaultLoopOptions,
+    comptime opts: LoopOptions,
 ) type {
     const has_coords = opts.coord_type != null;
     const is_zip_source = isZipSourceType(SourceType);
@@ -337,10 +328,11 @@ pub fn LoopResult(
             // Right: need margin.right + vec_len - 1 pixels to the right (for the vector read)
             // Top: need margin.top rows above
             // Bottom: need margin.bottom rows below
+            const right: i32 = @intCast(opts.margin.right);
             return src_region.deflated(
                 @intCast(opts.margin.left),
                 @intCast(opts.margin.top),
-                @as(i32, @intCast(opts.margin.right)) + vec_len - 1,
+                right + vec_len - 1,
                 @intCast(opts.margin.bottom),
             );
         }
@@ -354,11 +346,12 @@ pub fn LoopResult(
 /// Create a lazy processing loop
 pub fn loop(
     comptime VecT: type,
-    comptime opts: DefaultLoopOptions,
+    comptime opts: LoopOptions,
     source: anytype,
     context: anytype,
     comptime process_fn: anytype,
 ) LoopResult(VecT, @TypeOf(source), @TypeOf(context), process_fn, opts) {
+    comptime sources_mod.assertIsSource(@TypeOf(source));
     return .{
         .source = source,
         .context = context,
@@ -391,9 +384,12 @@ const getSourceVecLen = zip_mod.getSourceVecLen;
 /// strip uses unchecked reads (no bounds checking), which eliminates per-vector
 /// bounds comparisons for the majority of pixels.
 pub fn process(source: anytype, dest: anytype) void {
-    const region = dest.region;
     const SourceType = @TypeOf(source);
     const DestType = @TypeOf(dest);
+    comptime sources_mod.assertIsSource(SourceType);
+    comptime sources_mod.assertIsDest(DestType);
+
+    const region = dest.region;
 
     // Determine vector length from Source or from Source and Destination
     const vec_len = getSourceVecLen(SourceType) orelse getCompatibleVectorLen(SourceType, DestType);
@@ -432,9 +428,11 @@ fn processStandard(
     comptime vec_len: comptime_int,
     comptime supports_overlapping_writes: bool,
 ) void {
+    const stop_x = region.stopX();
     for (0..region.height) |y| {
-        const y_coord: i32 = @as(i32, @intCast(y)) + region.y;
-        processRowChecked(SourceType, DestType, source, dest, region.x, region.x + @as(i32, @intCast(region.width)), y_coord, vec_len, supports_overlapping_writes);
+        const y_offset: i32 = @intCast(y);
+        const y_coord = region.y + y_offset;
+        processRowChecked(SourceType, DestType, source, dest, region.x, stop_x, y_coord, vec_len, supports_overlapping_writes);
     }
 }
 
@@ -450,14 +448,15 @@ fn processSplit(
     comptime supports_overlapping_writes: bool,
 ) void {
     const dst_x = region.x;
-    const dst_stop_x = region.x + @as(i32, @intCast(region.width));
+    const dst_stop_x = region.stopX();
 
     // Interior X bounds (clamped to destination region)
     const int_x_start = @max(dst_x, interior.x);
     const int_x_stop = @min(dst_stop_x, interior.stopX());
 
     for (0..region.height) |y| {
-        const y_coord: i32 = @as(i32, @intCast(y)) + region.y;
+        const y_offset: i32 = @intCast(y);
+        const y_coord = region.y + y_offset;
 
         // Check if this row is within the interior's Y range
         const y_in_interior = y_coord >= interior.y and y_coord < interior.stopY();

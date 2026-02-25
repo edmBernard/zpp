@@ -73,7 +73,6 @@ pub const statsWithCoords = stats_mod.statsWithCoords;
 pub const InterpolationMethod = interpolation_mod.InterpolationMethod;
 pub const interpLoop = interpolation_mod.interpLoop;
 pub const LoopOptions = loop_mod.LoopOptions;
-pub const DefaultLoopOptions = loop_mod.DefaultLoopOptions;
 
 // Loop module (core processing)
 pub const loop = loop_mod.loop;
