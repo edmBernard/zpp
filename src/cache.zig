@@ -187,33 +187,51 @@ pub fn CachedLoopResult(
         fn computeRow(self: Self, y: i64) void {
             const row_buffer = self.cache.getRowBuffer(y);
             const y32: i32 = @intCast(y);
+            const width = self.region.width;
 
+            // Process full vectors
             var x: u32 = 0;
-            while (x < self.region.width) : (x += @intCast(vec_len)) {
-                const x_offset: i32 = @intCast(x);
-                const x32 = self.region.x + x_offset;
+            while (x + vec_len <= width) : (x += vec_len) {
+                const result = self.evalKernel(row_buffer, x, y32);
+                row_buffer[x..][0..vec_len].* = @as([vec_len]ElemT, result);
+            }
 
-                const accessor = AccessorType{
-                    .source = self.source,
-                    .current_x = x32,
-                    .current_y = y32,
-                };
-
-                const result: VecT = if (has_coords) blk: {
-                    const CoordT = opts.coord_type.?;
-                    const iota = std.simd.iota(@typeInfo(CoordT).vector.child, vec_len);
-                    const x_coords: CoordT = iota + castScalarCoordToVector(CoordT, x32);
-                    const y_coords: CoordT = castScalarCoordToVector(CoordT, y32);
-                    break :blk kernel_fn(self.context, accessor, x_coords, y_coords);
-                } else kernel_fn(self.context, accessor);
-
-                // Store result in cache
-                inline for (0..vec_len) |i| {
-                    if (x + i < self.region.width) {
-                        row_buffer[x + i] = result[i];
+            // Handle remainder with overlapping write
+            if (x < width) {
+                if (width >= vec_len) {
+                    const aligned_x = width - vec_len;
+                    const result = self.evalKernel(row_buffer, aligned_x, y32);
+                    row_buffer[aligned_x..][0..vec_len].* = @as([vec_len]ElemT, result);
+                } else {
+                    // Width < vec_len: element-by-element (rare edge case)
+                    const result = self.evalKernel(row_buffer, x, y32);
+                    inline for (0..vec_len) |i| {
+                        if (x + i < width) {
+                            row_buffer[x + i] = result[i];
+                        }
                     }
                 }
             }
+        }
+
+        /// Evaluate kernel at position (x, y32) and return the result vector.
+        inline fn evalKernel(self: Self, _: []ElemT, x: u32, y32: i32) VecT {
+            const x_offset: i32 = @intCast(x);
+            const x32 = self.region.x + x_offset;
+
+            const accessor = AccessorType{
+                .source = self.source,
+                .current_x = x32,
+                .current_y = y32,
+            };
+
+            return if (has_coords) blk: {
+                const CoordT = opts.coord_type.?;
+                const iota = std.simd.iota(@typeInfo(CoordT).vector.child, vec_len);
+                const x_coords: CoordT = iota + castScalarCoordToVector(CoordT, x32);
+                const y_coords: CoordT = castScalarCoordToVector(CoordT, y32);
+                break :blk kernel_fn(self.context, accessor, x_coords, y_coords);
+            } else kernel_fn(self.context, accessor);
         }
 
         /// Evaluate at a specific position, using cached data.
@@ -221,14 +239,14 @@ pub fn CachedLoopResult(
             // Ensure needed rows are cached
             self.ensureRowsCached(y);
 
-            // Read from cache
+            // Read from cache (getRowData hoisted out of per-lane loop)
             var result: VecT = @splat(0);
+            const row_data = self.cache.getRowData(y);
+            const width: i32 = @intCast(self.region.width);
             inline for (0..vec_len) |i| {
                 const offset: i32 = @intCast(i);
                 const px = x - self.region.x + offset;
-                const width: i32 = @intCast(self.region.width);
                 if (px >= 0 and px < width) {
-                    const row_data = self.cache.getRowData(y);
                     result[i] = row_data[@intCast(px)];
                 }
             }

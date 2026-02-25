@@ -147,7 +147,7 @@ pub fn InputSource(comptime T: type, comptime PaddingPolicy: type) type {
         /// Read a vector of values starting at the given position (horizontal SIMD load).
         /// Returns vec_len values: [data[x], data[x+1], ..., data[x+vec_len-1]]
         /// When all indices are in-bounds, performs a direct SIMD load from memory.
-        /// When out-of-bounds, falls back to element-by-element padding application.
+        /// When out-of-bounds, uses vectorized coordinate clamping where possible.
         pub fn readVec(self: Self, comptime VecT: type, x: i32, y: i32) VecT {
             const vec_len = @typeInfo(VecT).vector.len;
 
@@ -159,8 +159,28 @@ pub fn InputSource(comptime T: type, comptime PaddingPolicy: type) type {
                 return self.readVecUnchecked(VecT, x, y);
             }
 
-            // TODO: Implement vectorized padding
-            // Slow path: apply padding policy element-by-element
+            // Vectorized path: y in bounds, x straddles boundary
+            if (y >= self.region.y and y < self.region.stopY() and
+                self.region.width > 0)
+            {
+                const x_vec = std.simd.iota(i32, vec_len) + @as(@Vector(vec_len, i32), @splat(x));
+                const clamped_x = PaddingPolicy.clampX(vec_len, x_vec, self.region);
+                const uy: u32 = @intCast(y);
+                const base = uy * self.stride;
+                var result: VecT = undefined;
+                inline for (0..vec_len) |i| {
+                    result[i] = self.data[base + @as(u32, @intCast(clamped_x[i]))];
+                }
+                if (PaddingPolicy.needs_mask) {
+                    // Zero out-of-bounds lanes (for ZeroPadding)
+                    const mask = PaddingPolicy.inBoundsX(vec_len, x_vec, self.region);
+                    const zero: VecT = @splat(0);
+                    result = @select(T, mask, result, zero);
+                }
+                return result;
+            }
+
+            // Slow path: y out of bounds (rare — only at top/bottom edges)
             var result: VecT = undefined;
             inline for (0..vec_len) |i| {
                 result[i] = self.read(x + @as(i32, @intCast(i)), y);
