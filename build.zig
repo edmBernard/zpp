@@ -198,6 +198,54 @@ pub fn build(b: *std.Build) void {
     const run_checkerboard_tests = b.addRunArtifact(checkerboard_tests);
     test_step.dependOn(&run_checkerboard_tests.step);
 
+    // Bench Interpolation Example
+    const bench_interp_exe = b.addExecutable(.{
+        .name = "bench_interpolation",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/bench_interpolation.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zpp", .module = mod },
+            },
+        }),
+    });
+
+    b.installArtifact(bench_interp_exe);
+
+    const run_bench_interp = b.addRunArtifact(bench_interp_exe);
+    run_bench_interp.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        run_bench_interp.addArgs(args);
+    }
+
+    const bench_interp_step = b.step("run-bench-interpolation", "Run the interpolation benchmark");
+    bench_interp_step.dependOn(&run_bench_interp.step);
+
+    // Bench Cache Example
+    const bench_cache_exe = b.addExecutable(.{
+        .name = "bench_cache",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/bench_cache.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zpp", .module = mod },
+            },
+        }),
+    });
+
+    b.installArtifact(bench_cache_exe);
+
+    const run_bench_cache = b.addRunArtifact(bench_cache_exe);
+    run_bench_cache.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        run_bench_cache.addArgs(args);
+    }
+
+    const bench_cache_step = b.step("run-bench-cache", "Run the cache benchmark");
+    bench_cache_step.dependOn(&run_bench_cache.step);
+
     // =========================================================================
     // MARK: Documentation
     // =========================================================================
