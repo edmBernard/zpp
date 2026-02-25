@@ -30,7 +30,6 @@ pub fn PixelInterpolator(comptime SourceType: type, comptime VecT: type, comptim
 
     return struct {
         source: SourceType,
-        region: Region,
 
         const Self = @This();
 
@@ -177,7 +176,6 @@ pub fn InterpLoopResult(
             // Create interpolator for the source
             const interpolator = InterpolatorType{
                 .source = self.source,
-                .region = self.source.region,
             };
 
             // Build coordinate vectors for output position

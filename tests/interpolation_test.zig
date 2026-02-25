@@ -106,6 +106,43 @@ test "InterpLoop: 2x scale with nearest produces correct duplication" {
     try std.testing.expectEqual(expected_data, output_data);
 }
 
+// MARK: InterpLoop Nearest: identity transform with generator source
+test "InterpLoop Nearest: identity transform with generator source" {
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
+
+    var output_data = [_]f32{0} ** 8;
+    const destination = zpp.makeDest(f32, &output_data, region.width, region);
+
+    // Generator that produces y * width + x (ramp pattern)
+    const gen_kernel = struct {
+        fn process(ctx: anytype, x: f32x4, y: f32x4) f32x4 {
+            _ = ctx;
+            const factor: f32x4 = @splat(4);
+            return x + y * factor;
+        }
+    };
+
+    const generator = zpp.generate(f32x4, .{}, gen_kernel.process);
+
+    // Identity transform kernel - sample at same coordinates
+    const interp_kernel = struct {
+        fn process(ctx: anytype, interp: anytype, x: f32x4, y: f32x4) f32x4 {
+            _ = ctx;
+            return interp.sample(x, y);
+        }
+    };
+
+    const result = zpp.interpLoop(f32x4, .nearest, generator, region, .{}, interp_kernel.process);
+    zpp.process(result, destination);
+
+    // Generator produces x + y*4, so: row0=[0,1,2,3], row1=[4,5,6,7]
+    const expected_data: [8]f32 = .{
+        0.0, 1.0, 2.0, 3.0,
+        4.0, 5.0, 6.0, 7.0,
+    };
+    try std.testing.expectEqual(expected_data, output_data);
+}
+
 // MARK: InterpLoop: 2x scale with linear produces correct value
 test "InterpLoop: 2x scale with linear produces correct value" {
     const input_region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 4 };
