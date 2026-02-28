@@ -49,7 +49,8 @@ pub fn main() !void {
     const source = zpp.makeSource(f32, src_data, width, region);
     const dest = zpp.makeDest(f32, dst_data, width, region);
 
-    var times: [num_iterations]u64 = undefined;
+    var times_with_cache: [num_iterations]u64 = undefined;
+    var times_without_cache: [num_iterations]u64 = undefined;
 
     for (0..num_iterations) |iter| {
         var timer = std.time.Timer.start() catch unreachable;
@@ -57,7 +58,7 @@ pub fn main() !void {
         // Horizontal blur with cache (vertical margin for the subsequent vertical pass)
         const h_blur = try zpp.cachedLoop(
             f32v,
-            .{ .margin = .{ .left = 1, .right = 1 } },
+            .{ .margin = .horizontal(1) },
             3, // cache 3 rows for vertical margin
             allocator,
             source,
@@ -69,7 +70,7 @@ pub fn main() !void {
         // Vertical blur reading from the cached horizontal blur
         const v_blur = zpp.loop(
             f32v,
-            .{ .margin = .{ .top = 1, .bottom = 1 } },
+            .{ .margin = .vertical(1) },
             h_blur,
             {},
             vBlurKernel,
@@ -77,16 +78,47 @@ pub fn main() !void {
 
         zpp.process(v_blur, dest);
 
-        times[iter] = timer.read();
+        times_with_cache[iter] = timer.read();
+    }
+
+    for (0..num_iterations) |iter| {
+        var timer = std.time.Timer.start() catch unreachable;
+
+        // Horizontal blur without cache (vertical margin for the subsequent vertical pass)
+        const h_blur = zpp.loop(
+            f32v,
+            .{ .margin = .horizontal(1) },
+            source,
+            {},
+            hBlurKernel,
+        );
+
+        // Vertical blur reading from the horizontal blur
+        const v_blur = zpp.loop(
+            f32v,
+            .{ .margin = .vertical(1) },
+            h_blur,
+            {},
+            vBlurKernel,
+        );
+
+        zpp.process(v_blur, dest);
+
+        times_without_cache[iter] = timer.read();
     }
 
     // Sort to find median
-    std.mem.sort(u64, &times, {}, std.sort.asc(u64));
-    const median_ns = times[num_iterations / 2];
-    const median_ms = @as(f64, @floatFromInt(median_ns)) / 1_000_000.0;
+    std.mem.sort(u64, &times_with_cache, {}, std.sort.asc(u64));
+    std.mem.sort(u64, &times_without_cache, {}, std.sort.asc(u64));
+    const median_ns_with_cache = times_with_cache[num_iterations / 2];
+    const median_ns_without_cache = times_without_cache[num_iterations / 2];
+    const median_ms_with_cache = @as(f64, @floatFromInt(median_ns_with_cache)) / 1_000_000.0;
+    const median_ms_without_cache = @as(f64, @floatFromInt(median_ns_without_cache)) / 1_000_000.0;
     const total_pixels: f64 = @floatFromInt(@as(u64, width) * @as(u64, height));
-    const mpixels_per_sec = total_pixels / (@as(f64, @floatFromInt(median_ns)) / 1_000_000_000.0) / 1_000_000.0;
+    const mpixels_per_sec_with_cache = total_pixels / (@as(f64, @floatFromInt(median_ns_with_cache)) / 1_000_000_000.0) / 1_000_000.0;
+    const mpixels_per_sec_without_cache = total_pixels / (@as(f64, @floatFromInt(median_ns_without_cache)) / 1_000_000_000.0) / 1_000_000.0;
 
-    std.debug.print("  Separable blur: {d:.1} ms  ({d:.1} Mpix/s)\n", .{ median_ms, mpixels_per_sec });
+    std.debug.print("  Separable blur with cache: {d:.1} ms  ({d:.1} Mpix/s)\n", .{ median_ms_with_cache, mpixels_per_sec_with_cache });
+    std.debug.print("  Separable blur without cache: {d:.1} ms  ({d:.1} Mpix/s)\n", .{ median_ms_without_cache, mpixels_per_sec_without_cache });
     std.debug.print("\nDone.\n", .{});
 }
