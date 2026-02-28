@@ -34,6 +34,7 @@ pub const u16v = @Vector(std.simd.suggestVectorLength(u16) orelse 1, u16);
 pub const u8v = @Vector(std.simd.suggestVectorLength(u8) orelse 1, u8);
 
 // TODO: add tests for this utility
+/// Method to create a vector type compatible with a given vector type but with a different scalar type.
 pub fn VectorLike(comptime VectorType: type, comptime ScalarType: type) type {
     return @Vector(@typeInfo(VectorType).vector.len, ScalarType);
 }
@@ -87,3 +88,6 @@ pub const cachedLoop = cache.cachedLoop;
 // ============================================================================
 
 pub const math = @import("math.zig");
+
+// Linear algebra module
+pub const zla = @import("zla/root.zig");

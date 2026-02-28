@@ -11,9 +11,9 @@ const std = @import("std");
 ///
 /// Example:
 /// ```zig
-/// const VecF32 = @Vector(4, f32);
-/// const ones = splat(VecF32, 1.0);  // {1.0, 1.0, 1.0, 1.0}
-/// const twos = splat(VecF32, @as(f32, 2.0));
+/// const f32v = @Vector(4, f32);
+/// const ones = splat(f32v, 1.0);  // {1.0, 1.0, 1.0, 1.0}
+/// const twos = splat(f32v, @as(f32, 2.0));
 /// ```
 pub inline fn splat(comptime VecT: type, scalar: @typeInfo(VecT).vector.child) VecT {
     return @splat(scalar);
@@ -46,6 +46,11 @@ pub inline fn trunc(v: anytype) @TypeOf(v) {
 /// Element-wise round for SIMD vectors.
 pub inline fn round(v: anytype) @TypeOf(v) {
     return @round(v);
+}
+
+/// Return the fractional part of a floating point number.
+pub inline fn fract(x: anytype) @TypeOf(x) {
+    return x - @floor(x);
 }
 
 /// Element-wise square root for SIMD vectors.
@@ -226,6 +231,33 @@ pub inline fn clamp(v: anytype, lo: @TypeOf(v), hi: @TypeOf(v)) @TypeOf(v) {
 /// Returns a + t * (b - a), equivalent to mix(a, b, t).
 pub inline fn lerp(a: anytype, b: @TypeOf(a), t: @TypeOf(a)) @TypeOf(a) {
     return a + t * (b - a);
+}
+
+/// Perform Hermite interpolation between two values.
+/// Returns 0 when x <= edge0, 1 when x >= edge1, and smoothly
+/// interpolates using 3t^2 - 2t^3 in between.
+pub inline fn smoothstep(edge0: anytype, edge1: @TypeOf(edge0), x: @TypeOf(edge0)) @TypeOf(edge0) {
+    const T = @TypeOf(edge0);
+    const zero: T = @splat(0);
+    const one: T = @splat(1);
+    const two: T = @splat(2);
+    const three: T = @splat(3);
+    const t = @min(@max((x - edge0) / (edge1 - edge0), zero), one);
+    return t * t * (three - two * t);
+}
+
+/// Perform Quintic interpolation between two values.
+/// Like smoothstep but with zero first and second derivatives at edges,
+/// using 6t^5 - 15t^4 + 10t^3.
+pub inline fn supersmoothstep(edge0: anytype, edge1: @TypeOf(edge0), x: @TypeOf(edge0)) @TypeOf(edge0) {
+    const T = @TypeOf(edge0);
+    const zero: T = @splat(0);
+    const one: T = @splat(1);
+    const six: T = @splat(6);
+    const fifteen: T = @splat(15);
+    const ten: T = @splat(10);
+    const t = @min(@max((x - edge0) / (edge1 - edge0), zero), one);
+    return t * t * t * (t * (t * six - fifteen) + ten);
 }
 
 /// Fused multiply-add for SIMD vectors: a * b + c

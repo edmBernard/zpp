@@ -195,6 +195,60 @@ test "SIMD pow" {
     try std.testing.expectApproxEqAbs(@as(f32, 10.0), result[3], tolerance); // 10^1 = 10
 }
 
+test "SIMD fract" {
+    const VecF32 = @Vector(4, f32);
+    const tolerance: f32 = 0.0001;
+
+    const x: VecF32 = @splat(3.7);
+    const r = zpp.math.fract(x);
+    try std.testing.expectApproxEqAbs(@as(f32, 0.7), r[0], tolerance);
+
+    const neg: VecF32 = @splat(-0.3);
+    const r2 = zpp.math.fract(neg);
+    // fract(-0.3) = -0.3 - floor(-0.3) = -0.3 - (-1) = 0.7
+    try std.testing.expectApproxEqAbs(@as(f32, 0.7), r2[0], tolerance);
+}
+
+test "SIMD smoothstep" {
+    const VecF32 = @Vector(4, f32);
+    const tolerance: f32 = 0.0001;
+    const zero: VecF32 = @splat(0.0);
+    const one: VecF32 = @splat(1.0);
+
+    // At edge0: should be 0
+    const r0 = zpp.math.smoothstep(zero, one, @as(VecF32, @splat(0.0)));
+    try std.testing.expectApproxEqAbs(@as(f32, 0.0), r0[0], tolerance);
+    // At edge1: should be 1
+    const r1 = zpp.math.smoothstep(zero, one, @as(VecF32, @splat(1.0)));
+    try std.testing.expectApproxEqAbs(@as(f32, 1.0), r1[0], tolerance);
+    // At midpoint: should be 0.5
+    const r5 = zpp.math.smoothstep(zero, one, @as(VecF32, @splat(0.5)));
+    try std.testing.expectApproxEqAbs(@as(f32, 0.5), r5[0], tolerance);
+    // Below edge0: clamped to 0
+    const rn = zpp.math.smoothstep(zero, one, @as(VecF32, @splat(-1.0)));
+    try std.testing.expectApproxEqAbs(@as(f32, 0.0), rn[0], tolerance);
+    // Above edge1: clamped to 1
+    const r2 = zpp.math.smoothstep(zero, one, @as(VecF32, @splat(2.0)));
+    try std.testing.expectApproxEqAbs(@as(f32, 1.0), r2[0], tolerance);
+}
+
+test "SIMD supersmoothstep" {
+    const VecF32 = @Vector(4, f32);
+    const tolerance: f32 = 0.0001;
+    const zero: VecF32 = @splat(0.0);
+    const one: VecF32 = @splat(1.0);
+
+    // At edge0: should be 0
+    const r0 = zpp.math.supersmoothstep(zero, one, @as(VecF32, @splat(0.0)));
+    try std.testing.expectApproxEqAbs(@as(f32, 0.0), r0[0], tolerance);
+    // At edge1: should be 1
+    const r1 = zpp.math.supersmoothstep(zero, one, @as(VecF32, @splat(1.0)));
+    try std.testing.expectApproxEqAbs(@as(f32, 1.0), r1[0], tolerance);
+    // At midpoint: should be 0.5
+    const r5 = zpp.math.supersmoothstep(zero, one, @as(VecF32, @splat(0.5)));
+    try std.testing.expectApproxEqAbs(@as(f32, 0.5), r5[0], tolerance);
+}
+
 test "SIMD atan2" {
     const VecF32 = @Vector(4, f32);
     const tolerance: f32 = 0.02; // atan2 approximation has some error
