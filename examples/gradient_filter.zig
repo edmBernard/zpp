@@ -25,27 +25,9 @@ const zpp = @import("zpp");
 
 const f32v = zpp.f32v;
 const vec_len = @typeInfo(f32v).vector.len;
-
-// ============================================================================
-// MARK: Linear Algebra Types
-// ============================================================================
-
-pub const Vec2 = struct {
-    x: f32v,
-    y: f32v,
-
-    pub inline fn add(a: Vec2, b: Vec2) Vec2 {
-        return .{ .x = a.x + b.x, .y = a.y + b.y };
-    }
-
-    pub inline fn mul1(a: Vec2, b: f32v) Vec2 {
-        return .{ .x = a.x * b, .y = a.y * b };
-    }
-
-    pub inline fn dot(p: Vec2, q: Vec2) f32v {
-        return p.x * q.x + p.y * q.y;
-    }
-};
+const la = zpp.zla.with(f32v);
+const Vec2 = la.Vec2;
+const Vec3 = la.Vec3;
 
 // ============================================================================
 // MARK: Helper Functions
@@ -58,62 +40,72 @@ pub inline fn fract(x: f32v) f32v {
 
 /// A periodic triangle function - faster approximation useful in hash functions
 inline fn triangle_func(in: f32v) f32v {
-    const z = in * zpp.math.splat(f32v, 0.25);
-    const f = zpp.math.splat(f32v, 2.0) * @abs(z - @floor(z) - zpp.math.splat(f32v, 0.5));
-    return zpp.math.splat(f32v, 2.0) * f - zpp.math.splat(f32v, 1.0);
+    const z = in * la.splat(0.25);
+    const f = la.splat(2.0) * @abs(z - @floor(z) - la.splat(0.5));
+    return la.splat(2.0) * f - la.splat(1.0);
 }
 
 // ============================================================================
 // MARK: Simplex Noise Implementation (used to generate source texture)
 // ============================================================================
 
-const K1: f32 = 0.366025404; // (sqrt(3)-1)/2
-const K2: f32 = 0.211324865; // (3-sqrt(3))/6
-
 inline fn hash(p: Vec2) Vec2 {
     const temp = Vec2{
-        .x = Vec2.dot(p, .{ .x = zpp.math.splat(f32v, 127.1), .y = zpp.math.splat(f32v, 311.7) }),
-        .y = Vec2.dot(p, .{ .x = zpp.math.splat(f32v, 269.5), .y = zpp.math.splat(f32v, 183.3) }),
+        .x = Vec2.dot(p, .{ .x = la.splat(127.1), .y = la.splat(311.7) }),
+        .y = Vec2.dot(p, .{ .x = la.splat(269.5), .y = la.splat(183.3) }),
     };
     return .{
-        .x = zpp.math.splat(f32v, -1.0) + zpp.math.splat(f32v, 2.0) * fract(triangle_func(temp.x) * zpp.math.splat(f32v, 43758.5453123)),
-        .y = zpp.math.splat(f32v, -1.0) + zpp.math.splat(f32v, 2.0) * fract(triangle_func(temp.y) * zpp.math.splat(f32v, 43758.5453123)),
+        .x = la.splat(-1.0) + la.splat(2.0) * fract(triangle_func(temp.x) * la.splat(43758.5453123)),
+        .y = la.splat(-1.0) + la.splat(2.0) * fract(triangle_func(temp.y) * la.splat(43758.5453123)),
     };
 }
 
-inline fn toSimplexCell(p: Vec2) Vec2 {
-    const k1 = zpp.math.splat(f32v, K1);
-    return .{
+/// 2D Simplex noise implementation.
+/// Uses direct hash computation for optimal SIMD performance.
+fn noise(p: Vec2) f32v {
+    // Skew/Unskew factors for simplex grid
+    const K1: f32 = 0.366025404; // (sqrt(3)-1)/2
+    const K2: f32 = 0.211324865; // (3-sqrt(3))/6
+
+    const k1 = la.splat(K1);
+    const k2 = la.splat(K2);
+
+    // Compute simplex cell coordinate
+    const i: Vec2 = .{
         .x = @floor(p.x + (p.x + p.y) * k1),
         .y = @floor(p.y + (p.x + p.y) * k1),
     };
-}
 
-pub fn noise(p: Vec2) f32v {
-    const k2 = zpp.math.splat(f32v, K2);
-    const i = toSimplexCell(p);
-
+    // Offset from cell origin (unskewing)
     const a: Vec2 = .{
         .x = p.x - i.x + (i.x + i.y) * k2,
         .y = p.y - i.y + (i.x + i.y) * k2,
     };
 
-    const m: f32v = @select(f32, a.x < a.y, zpp.math.splat(f32v, 0), zpp.math.splat(f32v, 1));
-    const o: Vec2 = .{ .x = m, .y = zpp.math.splat(f32v, 1) - m };
+    // Determine which simplex (lower or upper triangle)
+    const m: f32v = @select(f32, a.x < a.y, la.splat(0), la.splat(1));
+    const o: Vec2 = .{ .x = m, .y = la.splat(1.0) - m };
+
+    // Offsets for other two vertices
     const b: Vec2 = .{ .x = a.x - o.x + k2, .y = a.y - o.y + k2 };
     const c: Vec2 = .{
-        .x = a.x - zpp.math.splat(f32v, 1) + zpp.math.splat(f32v, 2) * k2,
-        .y = a.y - zpp.math.splat(f32v, 1) + zpp.math.splat(f32v, 2) * k2,
+        .x = a.x - la.splat(1.0) + la.splat(2.0) * k2,
+        .y = a.y - la.splat(1.0) + la.splat(2.0) * k2,
     };
 
-    const h0 = @max(zpp.math.splat(f32v, 0.5) - Vec2.dot(a, a), zpp.math.splat(f32v, 0));
-    const h1 = @max(zpp.math.splat(f32v, 0.5) - Vec2.dot(b, b), zpp.math.splat(f32v, 0));
-    const h2 = @max(zpp.math.splat(f32v, 0.5) - Vec2.dot(c, c), zpp.math.splat(f32v, 0));
-    const n0 = h0 * h0 * h0 * h0 * Vec2.dot(a, hash(.{ .x = i.x, .y = i.y }));
-    const n1 = h1 * h1 * h1 * h1 * Vec2.dot(b, hash(.{ .x = i.x + o.x, .y = i.y + o.y }));
-    const n2 = h2 * h2 * h2 * h2 * Vec2.dot(c, hash(.{ .x = i.x + zpp.math.splat(f32v, 1), .y = i.y + zpp.math.splat(f32v, 1) }));
+    // Falloff weights (radial basis functions)
+    const na: f32v = @max(la.splat(0.5) - Vec2.dot(a, a), la.splat(0));
+    const nb: f32v = @max(la.splat(0.5) - Vec2.dot(b, b), la.splat(0));
+    const nc: f32v = @max(la.splat(0.5) - Vec2.dot(c, c), la.splat(0));
 
-    return (n0 + n1 + n2) * zpp.math.splat(f32v, 70);
+    // Compute hash at the three simplex vertices and dot with offset
+    const n: Vec3 = .{
+        .x = na * na * na * na * Vec2.dot(a, hash(.{ .x = i.x, .y = i.y })),
+        .y = nb * nb * nb * nb * Vec2.dot(b, hash(.{ .x = i.x + o.x, .y = i.y + o.y })),
+        .z = nc * nc * nc * nc * Vec2.dot(c, hash(.{ .x = i.x + la.splat(1.0), .y = i.y + la.splat(1.0) })),
+    };
+
+    return (n.x + n.y + n.z) * la.splat(70);
 }
 
 // ============================================================================
@@ -131,7 +123,7 @@ pub fn noiseKernel(ctx: NoiseContext, x: f32v, y: f32v) f32v {
     const ys = y / ctx.scale;
     const n = noise(.{ .x = xs, .y = ys });
     // Map from [-1, 1] to [0, 1]
-    return n * zpp.math.splat(f32v, 0.5) + zpp.math.splat(f32v, 0.5);
+    return n * la.splat(0.5) + la.splat(0.5);
 }
 
 // ============================================================================
@@ -316,7 +308,7 @@ pub fn main() !void {
 
     std.debug.print("Gradient Filter Example using ZPP\n", .{});
     std.debug.print("==================================\n", .{});
-    std.debug.print("SIMD vector length: {d}\n", .{zpp.suggested_vec_len});
+    std.debug.print("SIMD vector length: {d}\n", .{vec_len});
     std.debug.print("Pipeline: noise -> resize(2x) -> gradient -> gamma\n", .{});
     std.debug.print("Generating {d}x{d} image...\n", .{ width, height });
 

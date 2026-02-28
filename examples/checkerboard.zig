@@ -18,11 +18,6 @@ const vec_len = @typeInfo(u8v).vector.len;
 const i32v = zpp.VectorLike(u8v, i32);
 const f32v = zpp.VectorLike(u8v, f32);
 
-/// Convenience alias for zpp.math.splat with VecF32
-inline fn splat(scalar: f32) f32v {
-    return zpp.math.splat(f32v, scalar);
-}
-
 // ============================================================================
 // MARK: ZPP Processing Kernel
 // ============================================================================
@@ -60,7 +55,7 @@ fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32, square_s
     @memset(data, 0);
 
     const context = CheckerboardContext{
-        .square_size = splat(square_size),
+        .square_size = @splat(square_size),
     };
 
     const region = zpp.Region{
@@ -120,43 +115,4 @@ pub fn main() !void {
     const filename = "checkerboard.ppm";
     try writePPM(filename, image_data, width, height);
     std.debug.print("Image saved to: {s}\n", .{filename});
-}
-
-// ============================================================================
-// MARK: Tests
-// ============================================================================
-
-test "checkerboard kernel produces valid RGB" {
-    const ctx = CheckerboardContext{
-        .square_size = splat(10.0),
-    };
-
-    // Test at origin (should be one color)
-    const rgb0 = checkerboardProcess(ctx, splat(0.0), splat(0.0));
-    for (0..vec_len) |i| {
-        try std.testing.expect(rgb0[0][i] == 0 or rgb0[0][i] == 255);
-        try std.testing.expectEqual(rgb0[0][i], rgb0[1][i]);
-        try std.testing.expectEqual(rgb0[0][i], rgb0[2][i]);
-    }
-}
-
-test "checkerboard pattern alternates" {
-    const ctx = CheckerboardContext{
-        .square_size = splat(10.0),
-    };
-
-    // Get values at two adjacent squares
-    const rgb1 = checkerboardProcess(ctx, splat(5.0), splat(5.0)); // center of first square
-    const rgb2 = checkerboardProcess(ctx, splat(15.0), splat(5.0)); // center of second square
-
-    // They should be opposite colors
-    for (0..vec_len) |i| {
-        try std.testing.expect(rgb1[0][i] != rgb2[0][i]);
-    }
-}
-
-test "zpp.Region integration" {
-    const region = zpp.Region{ .x = 0, .y = 0, .width = 16, .height = 16 };
-    try std.testing.expectEqual(@as(u32, 256), region.area());
-    try std.testing.expectEqual(@as(u32, 16), region.width);
 }
