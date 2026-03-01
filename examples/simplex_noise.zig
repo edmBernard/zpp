@@ -66,27 +66,22 @@ fn noise(p: Vec2) f32v {
     const k2 = la.splat(K2);
 
     // Compute simplex cell coordinate
+    const skew = (p.x + p.y) * k1;
     const i: Vec2 = .{
-        .x = @floor(p.x + (p.x + p.y) * k1),
-        .y = @floor(p.y + (p.x + p.y) * k1),
+        .x = @floor(p.x + skew),
+        .y = @floor(p.y + skew),
     };
 
     // Offset from cell origin (unskewing)
-    const a: Vec2 = .{
-        .x = p.x - i.x + (i.x + i.y) * k2,
-        .y = p.y - i.y + (i.x + i.y) * k2,
-    };
+    const a = p.sub(i).add1((i.x + i.y) * k2);
 
     // Determine which simplex (lower or upper triangle)
     const m: f32v = @select(f32, a.x < a.y, la.splat(0), la.splat(1));
     const o: Vec2 = .{ .x = m, .y = la.splat(1.0) - m };
 
     // Offsets for other two vertices
-    const b: Vec2 = .{ .x = a.x - o.x + k2, .y = a.y - o.y + k2 };
-    const c: Vec2 = .{
-        .x = a.x - la.splat(1.0) + la.splat(2.0) * k2,
-        .y = a.y - la.splat(1.0) + la.splat(2.0) * k2,
-    };
+    const b = a.sub(o).add1(k2);
+    const c = a.sub1(la.splat(1.0)).add1(la.splat(2.0) * k2);
 
     // Falloff weights (radial basis functions)
     const na: f32v = @max(la.splat(0.5) - Vec2.dot(a, a), la.splat(0));
