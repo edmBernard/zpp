@@ -90,4 +90,4 @@ pub const cachedLoop = cache.cachedLoop;
 pub const math = @import("math.zig");
 
 // Linear algebra module
-pub const zla = @import("zla/root.zig");
+pub const zla = @import("zla");

@@ -18,7 +18,7 @@ pub fn with(comptime VectorType: type) type {
         // MARK: Helper functions
 
         /// Convert a scalar to a vector by splatting it.
-        /// Most of the time we can directly use @splat, but this is easier to use inside expression.
+        /// Most of the time we can directly use @splat, but this helper is easier to use inside expression.
         pub inline fn splat(scalar: ScalarType) InnerType {
             return @splat(scalar);
         }
@@ -140,11 +140,48 @@ pub fn with(comptime VectorType: type) type {
         pub const Mat2x2 = struct {
             data: [4]InnerType,
 
+            pub const identity: Mat2x2 = .{ .data = .{
+                @splat(1), @splat(0),
+                @splat(0), @splat(1),
+            } };
+
+            pub inline fn rotation(angle: InnerType) Mat2x2 {
+                const c = @cos(angle);
+                const s = @sin(angle);
+                return .{ .data = .{
+                    c, -s,
+                    s, c,
+                } };
+            }
+
+            pub inline fn scaling(sx: InnerType, sy: InnerType) Mat2x2 {
+                return .{ .data = .{
+                    sx,        @splat(0),
+                    @splat(0), sy,
+                } };
+            }
+
+            pub inline fn mul1(m: Mat2x2, s: InnerType) Mat2x2 {
+                return .{ .data = .{
+                    m.data[0] * s, m.data[1] * s,
+                    m.data[2] * s, m.data[3] * s,
+                } };
+            }
+
             pub inline fn mulvec(m: Mat2x2, b: Vec2) Vec2 {
                 return .{
                     .x = m.data[0] * b.x + m.data[1] * b.y,
                     .y = m.data[2] * b.x + m.data[3] * b.y,
                 };
+            }
+
+            pub inline fn mul(a: Mat2x2, b: Mat2x2) Mat2x2 {
+                return .{ .data = .{
+                    a.data[0] * b.data[0] + a.data[1] * b.data[2],
+                    a.data[0] * b.data[1] + a.data[1] * b.data[3],
+                    a.data[2] * b.data[0] + a.data[3] * b.data[2],
+                    a.data[2] * b.data[1] + a.data[3] * b.data[3],
+                } };
             }
         };
 
@@ -153,12 +190,78 @@ pub fn with(comptime VectorType: type) type {
         pub const Mat3x3 = struct {
             data: [9]InnerType,
 
+            pub const identity: Mat3x3 = .{ .data = .{
+                @splat(1), @splat(0), @splat(0),
+                @splat(0), @splat(1), @splat(0),
+                @splat(0), @splat(0), @splat(1),
+            } };
+
+            pub inline fn scaling(sx: InnerType, sy: InnerType, sz: InnerType) Mat3x3 {
+                return .{ .data = .{
+                    sx,        @splat(0), @splat(0),
+                    @splat(0), sy,        @splat(0),
+                    @splat(0), @splat(0), sz,
+                } };
+            }
+
+            pub inline fn rotationX(angle: InnerType) Mat3x3 {
+                const c = @cos(angle);
+                const s = @sin(angle);
+                return .{ .data = .{
+                    @splat(1), @splat(0), @splat(0),
+                    @splat(0), c,         -s,
+                    @splat(0), s,         c,
+                } };
+            }
+
+            pub inline fn rotationY(angle: InnerType) Mat3x3 {
+                const c = @cos(angle);
+                const s = @sin(angle);
+                return .{ .data = .{
+                    c,         @splat(0), s,
+                    @splat(0), @splat(1), @splat(0),
+                    -s,        @splat(0), c,
+                } };
+            }
+
+            pub inline fn rotationZ(angle: InnerType) Mat3x3 {
+                const c = @cos(angle);
+                const s = @sin(angle);
+                return .{ .data = .{
+                    c,         -s,        @splat(0),
+                    s,         c,         @splat(0),
+                    @splat(0), @splat(0), @splat(1),
+                } };
+            }
+
+            pub inline fn mul1(m: Mat3x3, s: InnerType) Mat3x3 {
+                return .{ .data = .{
+                    m.data[0] * s, m.data[1] * s, m.data[2] * s,
+                    m.data[3] * s, m.data[4] * s, m.data[5] * s,
+                    m.data[6] * s, m.data[7] * s, m.data[8] * s,
+                } };
+            }
+
             pub inline fn mulvec(m: Mat3x3, b: Vec3) Vec3 {
                 return .{
                     .x = m.data[0] * b.x + m.data[1] * b.y + m.data[2] * b.z,
                     .y = m.data[3] * b.x + m.data[4] * b.y + m.data[5] * b.z,
                     .z = m.data[6] * b.x + m.data[7] * b.y + m.data[8] * b.z,
                 };
+            }
+
+            pub inline fn mul(a: Mat3x3, b: Mat3x3) Mat3x3 {
+                return .{ .data = .{
+                    a.data[0] * b.data[0] + a.data[1] * b.data[3] + a.data[2] * b.data[6],
+                    a.data[0] * b.data[1] + a.data[1] * b.data[4] + a.data[2] * b.data[7],
+                    a.data[0] * b.data[2] + a.data[1] * b.data[5] + a.data[2] * b.data[8],
+                    a.data[3] * b.data[0] + a.data[4] * b.data[3] + a.data[5] * b.data[6],
+                    a.data[3] * b.data[1] + a.data[4] * b.data[4] + a.data[5] * b.data[7],
+                    a.data[3] * b.data[2] + a.data[4] * b.data[5] + a.data[5] * b.data[8],
+                    a.data[6] * b.data[0] + a.data[7] * b.data[3] + a.data[8] * b.data[6],
+                    a.data[6] * b.data[1] + a.data[7] * b.data[4] + a.data[8] * b.data[7],
+                    a.data[6] * b.data[2] + a.data[7] * b.data[5] + a.data[8] * b.data[8],
+                } };
             }
         };
     };
@@ -179,139 +282,242 @@ const zla_f32 = with(@Vector(4, f32));
 // MARK: Tests Vec2
 
 test "Vec2 mul1" {
-    const v = zla_f32.Vec2{ .x = zla_f32.splat(2.0), .y = zla_f32.splat(3.0) };
-    const r = v.mul1(zla_f32.splat(4.0));
-    try testing.expect(std.meta.eql(r.x, zla_f32.splat(8.0)));
-    try testing.expect(std.meta.eql(r.y, zla_f32.splat(12.0)));
+    const v = zla_f32.Vec2{ .x = @splat(2.0), .y = @splat(3.0) };
+    const r = v.mul1(@splat(4.0));
+    try testing.expect(std.meta.eql(r.x, @splat(8.0)));
+    try testing.expect(std.meta.eql(r.y, @splat(12.0)));
 }
 
 test "Vec2 add1" {
-    const v = zla_f32.Vec2{ .x = zla_f32.splat(2.0), .y = zla_f32.splat(3.0) };
-    const r = v.add1(zla_f32.splat(4.0));
-    try testing.expect(std.meta.eql(r.x, zla_f32.splat(6.0)));
-    try testing.expect(std.meta.eql(r.y, zla_f32.splat(7.0)));
+    const v = zla_f32.Vec2{ .x = @splat(2.0), .y = @splat(3.0) };
+    const r = v.add1(@splat(4.0));
+    try testing.expect(std.meta.eql(r.x, @splat(6.0)));
+    try testing.expect(std.meta.eql(r.y, @splat(7.0)));
 }
 
 test "Vec2 add" {
-    const v = zla_f32.Vec2{ .x = zla_f32.splat(2.0), .y = zla_f32.splat(3.0) };
-    const r = v.add(.{ .x = zla_f32.splat(4.0), .y = zla_f32.splat(5.0) });
-    try testing.expect(std.meta.eql(r.x, zla_f32.splat(6.0)));
-    try testing.expect(std.meta.eql(r.y, zla_f32.splat(8.0)));
+    const v = zla_f32.Vec2{ .x = @splat(2.0), .y = @splat(3.0) };
+    const r = v.add(.{ .x = @splat(4.0), .y = @splat(5.0) });
+    try testing.expect(std.meta.eql(r.x, @splat(6.0)));
+    try testing.expect(std.meta.eql(r.y, @splat(8.0)));
 }
 
 test "Vec2 sub1" {
-    const v = zla_f32.Vec2{ .x = zla_f32.splat(5.0), .y = zla_f32.splat(7.0) };
-    const r = v.sub1(zla_f32.splat(2.0));
-    try testing.expect(std.meta.eql(r.x, zla_f32.splat(3.0)));
-    try testing.expect(std.meta.eql(r.y, zla_f32.splat(5.0)));
+    const v = zla_f32.Vec2{ .x = @splat(5.0), .y = @splat(7.0) };
+    const r = v.sub1(@splat(2.0));
+    try testing.expect(std.meta.eql(r.x, @splat(3.0)));
+    try testing.expect(std.meta.eql(r.y, @splat(5.0)));
 }
 
 test "Vec2 sub" {
-    const v = zla_f32.Vec2{ .x = zla_f32.splat(5.0), .y = zla_f32.splat(7.0) };
-    const r = v.sub(.{ .x = zla_f32.splat(2.0), .y = zla_f32.splat(3.0) });
-    try testing.expect(std.meta.eql(r.x, zla_f32.splat(3.0)));
-    try testing.expect(std.meta.eql(r.y, zla_f32.splat(4.0)));
+    const v = zla_f32.Vec2{ .x = @splat(5.0), .y = @splat(7.0) };
+    const r = v.sub(.{ .x = @splat(2.0), .y = @splat(3.0) });
+    try testing.expect(std.meta.eql(r.x, @splat(3.0)));
+    try testing.expect(std.meta.eql(r.y, @splat(4.0)));
 }
 
 test "Vec2 dot" {
-    const a = zla_f32.Vec2{ .x = zla_f32.splat(2.0), .y = zla_f32.splat(3.0) };
-    const b = zla_f32.Vec2{ .x = zla_f32.splat(4.0), .y = zla_f32.splat(5.0) };
+    const a = zla_f32.Vec2{ .x = @splat(2.0), .y = @splat(3.0) };
+    const b = zla_f32.Vec2{ .x = @splat(4.0), .y = @splat(5.0) };
     const r = zla_f32.Vec2.dot(a, b);
-    try testing.expect(std.meta.eql(r, zla_f32.splat(23.0)));
+    try testing.expect(std.meta.eql(r, @splat(23.0)));
 }
 
 // MARK: Tests Vec3
 
 test "Vec3 pow" {
-    const v = zla_f32.Vec3{ .x = zla_f32.splat(-2.0), .y = zla_f32.splat(2.0), .z = zla_f32.splat(3.0) };
+    const v = zla_f32.Vec3{ .x = @splat(-2.0), .y = @splat(2.0), .z = @splat(3.0) };
 
     const r0 = v.pow(0);
-    try testing.expect(std.meta.eql(r0.x, zla_f32.splat(1.0)));
-    try testing.expect(std.meta.eql(r0.y, zla_f32.splat(1.0)));
-    try testing.expect(std.meta.eql(r0.z, zla_f32.splat(1.0)));
+    try testing.expect(std.meta.eql(r0.x, @splat(1.0)));
+    try testing.expect(std.meta.eql(r0.y, @splat(1.0)));
+    try testing.expect(std.meta.eql(r0.z, @splat(1.0)));
 
     const r3 = v.pow(3);
-    try testing.expect(std.meta.eql(r3.x, zla_f32.splat(-8.0)));
-    try testing.expect(std.meta.eql(r3.y, zla_f32.splat(8.0)));
-    try testing.expect(std.meta.eql(r3.z, zla_f32.splat(27.0)));
+    try testing.expect(std.meta.eql(r3.x, @splat(-8.0)));
+    try testing.expect(std.meta.eql(r3.y, @splat(8.0)));
+    try testing.expect(std.meta.eql(r3.z, @splat(27.0)));
 
     const r10 = v.pow(10);
-    try testing.expect(std.meta.eql(r10.x, zla_f32.splat(1024.0)));
-    try testing.expect(std.meta.eql(r10.y, zla_f32.splat(1024.0)));
-    try testing.expect(std.meta.eql(r10.z, zla_f32.splat(59049.0)));
+    try testing.expect(std.meta.eql(r10.x, @splat(1024.0)));
+    try testing.expect(std.meta.eql(r10.y, @splat(1024.0)));
+    try testing.expect(std.meta.eql(r10.z, @splat(59049.0)));
 }
 
 test "Vec3 normalize" {
-    const v = zla_f32.Vec3{ .x = zla_f32.splat(3.0), .y = zla_f32.splat(0.0), .z = zla_f32.splat(0.0) };
+    const v = zla_f32.Vec3{ .x = @splat(3.0), .y = @splat(0.0), .z = @splat(0.0) };
     const n = v.normalize();
-    try expectVecEqual(4, n.x, zla_f32.splat(1.0));
-    try expectVecEqual(4, n.y, zla_f32.splat(0.0));
-    try expectVecEqual(4, n.z, zla_f32.splat(0.0));
+    try expectVecEqual(4, n.x, @splat(1.0));
+    try expectVecEqual(4, n.y, @splat(0.0));
+    try expectVecEqual(4, n.z, @splat(0.0));
 }
 
 test "Vec3 lerp" {
-    const a = zla_f32.Vec3{ .x = zla_f32.splat(0.0), .y = zla_f32.splat(0.0), .z = zla_f32.splat(0.0) };
-    const b = zla_f32.Vec3{ .x = zla_f32.splat(10.0), .y = zla_f32.splat(20.0), .z = zla_f32.splat(30.0) };
-    const r = a.lerp(b, zla_f32.splat(0.5));
-    try expectVecEqual(4, r.x, zla_f32.splat(5.0));
-    try expectVecEqual(4, r.y, zla_f32.splat(10.0));
-    try expectVecEqual(4, r.z, zla_f32.splat(15.0));
+    const a = zla_f32.Vec3{ .x = @splat(0.0), .y = @splat(0.0), .z = @splat(0.0) };
+    const b = zla_f32.Vec3{ .x = @splat(10.0), .y = @splat(20.0), .z = @splat(30.0) };
+    const r = a.lerp(b, @splat(0.5));
+    try expectVecEqual(4, r.x, @splat(5.0));
+    try expectVecEqual(4, r.y, @splat(10.0));
+    try expectVecEqual(4, r.z, @splat(15.0));
 }
 
 test "Vec3 mul" {
-    const a = zla_f32.Vec3{ .x = zla_f32.splat(2.0), .y = zla_f32.splat(3.0), .z = zla_f32.splat(4.0) };
-    const b = zla_f32.Vec3{ .x = zla_f32.splat(5.0), .y = zla_f32.splat(6.0), .z = zla_f32.splat(7.0) };
+    const a = zla_f32.Vec3{ .x = @splat(2.0), .y = @splat(3.0), .z = @splat(4.0) };
+    const b = zla_f32.Vec3{ .x = @splat(5.0), .y = @splat(6.0), .z = @splat(7.0) };
     const r = a.mul(b);
-    try testing.expect(std.meta.eql(r.x, zla_f32.splat(10.0)));
-    try testing.expect(std.meta.eql(r.y, zla_f32.splat(18.0)));
-    try testing.expect(std.meta.eql(r.z, zla_f32.splat(28.0)));
+    try testing.expect(std.meta.eql(r.x, @splat(10.0)));
+    try testing.expect(std.meta.eql(r.y, @splat(18.0)));
+    try testing.expect(std.meta.eql(r.z, @splat(28.0)));
 }
 
 test "Vec3 dot" {
-    const a = zla_f32.Vec3{ .x = zla_f32.splat(1.0), .y = zla_f32.splat(2.0), .z = zla_f32.splat(3.0) };
-    const b = zla_f32.Vec3{ .x = zla_f32.splat(4.0), .y = zla_f32.splat(5.0), .z = zla_f32.splat(6.0) };
+    const a = zla_f32.Vec3{ .x = @splat(1.0), .y = @splat(2.0), .z = @splat(3.0) };
+    const b = zla_f32.Vec3{ .x = @splat(4.0), .y = @splat(5.0), .z = @splat(6.0) };
     const r = zla_f32.Vec3.dot(a, b);
-    try testing.expect(std.meta.eql(r, zla_f32.splat(32.0)));
+    try testing.expect(std.meta.eql(r, @splat(32.0)));
 }
 
 // MARK: Tests Mat2x2
 
-test "Mat2x2 mulvec2" {
-    // Identity matrix
-    const m = zla_f32.Mat2x2{ .data = .{ zla_f32.splat(1.0), zla_f32.splat(0.0), zla_f32.splat(0.0), zla_f32.splat(1.0) } };
-    const v = zla_f32.Vec2{ .x = zla_f32.splat(3.0), .y = zla_f32.splat(4.0) };
-    const r = m.mulvec(v);
-    try testing.expect(std.meta.eql(r.x, zla_f32.splat(3.0)));
-    try testing.expect(std.meta.eql(r.y, zla_f32.splat(4.0)));
+test "Mat2x2 identity" {
+    const v = zla_f32.Vec2{ .x = @splat(3.0), .y = @splat(4.0) };
+    const r = zla_f32.Mat2x2.identity.mulvec(v);
+    try testing.expect(std.meta.eql(r.x, @splat(3.0)));
+    try testing.expect(std.meta.eql(r.y, @splat(4.0)));
+}
 
+test "Mat2x2 rotation" {
+    const half_pi = zla_f32.splat(std.math.pi / 2.0);
+    const m = zla_f32.Mat2x2.rotation(half_pi);
+    const v = zla_f32.Vec2{ .x = @splat(1.0), .y = @splat(0.0) };
+    const r = m.mulvec(v);
+    try expectVecEqual(4, r.x, @splat(0.0));
+    try expectVecEqual(4, r.y, @splat(1.0));
+}
+
+test "Mat2x2 scaling" {
+    const m = zla_f32.Mat2x2.scaling(@splat(2.0), @splat(3.0));
+    const v = zla_f32.Vec2{ .x = @splat(4.0), .y = @splat(5.0) };
+    const r = m.mulvec(v);
+    try testing.expect(std.meta.eql(r.x, @splat(8.0)));
+    try testing.expect(std.meta.eql(r.y, @splat(15.0)));
+}
+
+test "Mat2x2 mul1" {
+    const m = zla_f32.Mat2x2{ .data = .{ @splat(1.0), @splat(2.0), @splat(3.0), @splat(4.0) } };
+    const r = m.mul1(@splat(2.0));
+    try testing.expect(std.meta.eql(r.data[0], @splat(2.0)));
+    try testing.expect(std.meta.eql(r.data[1], @splat(4.0)));
+    try testing.expect(std.meta.eql(r.data[2], @splat(6.0)));
+    try testing.expect(std.meta.eql(r.data[3], @splat(8.0)));
+}
+
+test "Mat2x2 mulvec2" {
     // 90 degree rotation (approximate)
-    const m2 = zla_f32.Mat2x2{ .data = .{ zla_f32.splat(0.0), zla_f32.splat(-1.0), zla_f32.splat(1.0), zla_f32.splat(0.0) } };
+    const m2 = zla_f32.Mat2x2{ .data = .{ @splat(0.0), @splat(-1.0), @splat(1.0), @splat(0.0) } };
+    const v = zla_f32.Vec2{ .x = @splat(3.0), .y = @splat(4.0) };
     const r2 = m2.mulvec(v);
-    try testing.expect(std.meta.eql(r2.x, zla_f32.splat(-4.0)));
-    try testing.expect(std.meta.eql(r2.y, zla_f32.splat(3.0)));
+    try testing.expect(std.meta.eql(r2.x, @splat(-4.0)));
+    try testing.expect(std.meta.eql(r2.y, @splat(3.0)));
+}
+
+test "Mat2x2 mul" {
+    // rotation by pi/2 twice should give rotation by pi
+    const half_pi = zla_f32.splat(std.math.pi / 2.0);
+    const r90 = zla_f32.Mat2x2.rotation(half_pi);
+    const r180 = r90.mul(r90);
+    const v = zla_f32.Vec2{ .x = @splat(1.0), .y = @splat(0.0) };
+    const r = r180.mulvec(v);
+    try expectVecEqual(4, r.x, @splat(-1.0));
+    try expectVecEqual(4, r.y, @splat(0.0));
 }
 
 // MARK: Tests Mat3x3
 
-test "Mat3x3 mulvec3" {
-    // Identity matrix
-    const m = zla_f32.Mat3x3{ .data = .{
-        zla_f32.splat(1.0), zla_f32.splat(0.0), zla_f32.splat(0.0),
-        zla_f32.splat(0.0), zla_f32.splat(1.0), zla_f32.splat(0.0),
-        zla_f32.splat(0.0), zla_f32.splat(0.0), zla_f32.splat(1.0),
-    } };
-    const v = zla_f32.Vec3{ .x = zla_f32.splat(3.0), .y = zla_f32.splat(4.0), .z = zla_f32.splat(5.0) };
+test "Mat3x3 identity" {
+    const v = zla_f32.Vec3{ .x = @splat(3.0), .y = @splat(4.0), .z = @splat(5.0) };
+    const r = zla_f32.Mat3x3.identity.mulvec(v);
+    try testing.expect(std.meta.eql(r.x, @splat(3.0)));
+    try testing.expect(std.meta.eql(r.y, @splat(4.0)));
+    try testing.expect(std.meta.eql(r.z, @splat(5.0)));
+}
+
+test "Mat3x3 scaling" {
+    const m = zla_f32.Mat3x3.scaling(@splat(2.0), @splat(3.0), @splat(4.0));
+    const v = zla_f32.Vec3{ .x = @splat(1.0), .y = @splat(2.0), .z = @splat(3.0) };
     const r = m.mulvec(v);
-    try testing.expect(std.meta.eql(r.x, zla_f32.splat(3.0)));
-    try testing.expect(std.meta.eql(r.y, zla_f32.splat(4.0)));
-    try testing.expect(std.meta.eql(r.z, zla_f32.splat(5.0)));
+    try testing.expect(std.meta.eql(r.x, @splat(2.0)));
+    try testing.expect(std.meta.eql(r.y, @splat(6.0)));
+    try testing.expect(std.meta.eql(r.z, @splat(12.0)));
+}
+
+test "Mat3x3 rotationZ" {
+    // Rotating (1,0,0) by pi/2 around Z should give (0,1,0)
+    const half_pi = zla_f32.splat(std.math.pi / 2.0);
+    const m = zla_f32.Mat3x3.rotationZ(half_pi);
+    const v = zla_f32.Vec3{ .x = @splat(1.0), .y = @splat(0.0), .z = @splat(0.0) };
+    const r = m.mulvec(v);
+    try expectVecEqual(4, r.x, @splat(0.0));
+    try expectVecEqual(4, r.y, @splat(1.0));
+    try expectVecEqual(4, r.z, @splat(0.0));
+}
+
+test "Mat3x3 rotationX" {
+    // Rotating (0,1,0) by pi/2 around X should give (0,0,1)
+    const half_pi = zla_f32.splat(std.math.pi / 2.0);
+    const m = zla_f32.Mat3x3.rotationX(half_pi);
+    const v = zla_f32.Vec3{ .x = @splat(0.0), .y = @splat(1.0), .z = @splat(0.0) };
+    const r = m.mulvec(v);
+    try expectVecEqual(4, r.x, @splat(0.0));
+    try expectVecEqual(4, r.y, @splat(0.0));
+    try expectVecEqual(4, r.z, @splat(1.0));
+}
+
+test "Mat3x3 rotationY" {
+    // Rotating (0,0,1) by pi/2 around Y should give (1,0,0)
+    const half_pi = zla_f32.splat(std.math.pi / 2.0);
+    const m = zla_f32.Mat3x3.rotationY(half_pi);
+    const v = zla_f32.Vec3{ .x = @splat(0.0), .y = @splat(0.0), .z = @splat(1.0) };
+    const r = m.mulvec(v);
+    try expectVecEqual(4, r.x, @splat(1.0));
+    try expectVecEqual(4, r.y, @splat(0.0));
+    try expectVecEqual(4, r.z, @splat(0.0));
+}
+
+test "Mat3x3 mul1" {
+    const m = zla_f32.Mat3x3.identity;
+    const r = m.mul1(@splat(5.0));
+    try testing.expect(std.meta.eql(r.data[0], @splat(5.0)));
+    try testing.expect(std.meta.eql(r.data[1], @splat(0.0)));
+    try testing.expect(std.meta.eql(r.data[4], @splat(5.0)));
+    try testing.expect(std.meta.eql(r.data[8], @splat(5.0)));
+}
+
+test "Mat3x3 mulvec3" {
+    const v = zla_f32.Vec3{ .x = @splat(3.0), .y = @splat(4.0), .z = @splat(5.0) };
+    const r = zla_f32.Mat3x3.identity.mulvec(v);
+    try testing.expect(std.meta.eql(r.x, @splat(3.0)));
+    try testing.expect(std.meta.eql(r.y, @splat(4.0)));
+    try testing.expect(std.meta.eql(r.z, @splat(5.0)));
+}
+
+test "Mat3x3 mul" {
+    // rotationZ by pi/2 twice should give rotation by pi
+    const half_pi = zla_f32.splat(std.math.pi / 2.0);
+    const r90 = zla_f32.Mat3x3.rotationZ(half_pi);
+    const r180 = r90.mul(r90);
+    const v = zla_f32.Vec3{ .x = @splat(1.0), .y = @splat(0.0), .z = @splat(0.0) };
+    const r = r180.mulvec(v);
+    try expectVecEqual(4, r.x, @splat(-1.0));
+    try expectVecEqual(4, r.y, @splat(0.0));
+    try expectVecEqual(4, r.z, @splat(0.0));
 }
 
 // MARK: Tests helper functions
 
 test "splat" {
     const v = zla_f32.splat(42.0);
-    try testing.expect(std.meta.eql(v, zla_f32.splat(42.0)));
+    try testing.expect(std.meta.eql(v, @splat(42.0)));
 }
 
 // MARK: Multi-type test

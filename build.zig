@@ -28,17 +28,17 @@ pub fn build(b: *std.Build) void {
     // to our consumers. We must give it a name because a Zig package can expose
     // multiple modules and consumers will need to be able to specify which
     // module they want to access.
-    const mod = b.addModule("zpp", .{
-        // The root source file is the "entry point" of this module. Users of
-        // this module will only be able to access public declarations contained
-        // in this file, which means that if you have declarations that you
-        // intend to expose to consumers that were defined in other files part
-        // of this module, you will have to make sure to re-export them from
-        // the root file.
-        .root_source_file = b.path("src/root.zig"),
-        // Later on we'll use this module as the root module of a test executable
-        // which requires us to specify a target.
+    const zla_mod = b.addModule("zla", .{
+        .root_source_file = b.path("src/zla/root.zig"),
         .target = target,
+    });
+
+    const mod = b.addModule("zpp", .{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "zla", .module = zla_mod },
+        },
     });
 
     // Creates an executable that will run tests from the tests/ directory.
@@ -53,12 +53,23 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    // A run step that will run the test executable.
+    // Tests for the zla module.
+    const zla_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/zla/root.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+
+    // A run step that will run the test executables.
     const run_tests = b.addRunArtifact(tests);
+    const run_zla_tests = b.addRunArtifact(zla_tests);
 
     // A top level step for running all tests.
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_tests.step);
+    test_step.dependOn(&run_zla_tests.step);
 
     // Install the test binary so it can be launched under a debugger.
     // After `zig build test-install`, the binary is at zig-out/bin/zpp-tests.
