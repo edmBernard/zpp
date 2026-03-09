@@ -37,31 +37,6 @@ pub fn isGroupSourceType(comptime T: type) bool {
     return group.isGroupSourceType(T);
 }
 
-/// Extract the inner vector type from a type.
-/// If T is a vector, returns T.
-/// If T is an array of vectors (e.g., [3]@Vector(4, f32)), returns the vector type.
-/// If T is a tuple of vectors (e.g., struct{f32x4, f32x4}), returns the first vector type.
-pub fn InnerVectorType(comptime T: type) type {
-    const type_info = @typeInfo(T);
-    if (type_info == .vector) {
-        return T;
-    } else if (type_info == .array) {
-        const child_info = @typeInfo(type_info.array.child);
-        if (child_info == .vector) {
-            return type_info.array.child;
-        }
-    } else if (type_info == .@"struct" and type_info.@"struct".is_tuple) {
-        // Tuple of vectors - return the first element's type
-        if (type_info.@"struct".fields.len > 0) {
-            const first_field_type = type_info.@"struct".fields[0].type;
-            if (@typeInfo(first_field_type) == .vector) {
-                return first_field_type;
-            }
-        }
-    }
-    @compileError("Expected vector, array of vectors, or tuple of vectors, got " ++ @typeName(T));
-}
-
 /// Get the vector length from either a vector type, array of vectors, or tuple of vectors
 pub fn vectorLen(comptime T: type) comptime_int {
     const type_info = @typeInfo(T);
@@ -85,7 +60,7 @@ pub fn vectorLen(comptime T: type) comptime_int {
 }
 
 /// Get the return type of a process function
-pub fn ProcessReturnType(comptime process_fn: anytype) type {
+fn ProcessReturnType(comptime process_fn: anytype) type {
     const fn_info = @typeInfo(@TypeOf(process_fn)).@"fn";
     return fn_info.return_type.?;
 }

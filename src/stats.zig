@@ -29,7 +29,7 @@ pub fn StatsDest(
         const Self = @This();
 
         inline fn scalarBatch(value: InputScalarType) VecT {
-            var single: VecT = @splat(value);
+            var single: VecT = @splat(0);
             single[0] = value;
             return single;
         }

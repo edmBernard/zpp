@@ -9,7 +9,7 @@ This library provide some basic linear algebra such as Vec2, Vec3, Mat2x2 etc...
 const zla = @import("zla");
 
 // Instantiate with your SIMD vector type
-const zlaf = zla.with(@Vector(4, f32));
+const zlaf = zla.With(@Vector(4, f32));
 
 // Create vectors
 const a = zlaf.Vec2{ .x = @splat(1.0), .y = @splat(2.0) };

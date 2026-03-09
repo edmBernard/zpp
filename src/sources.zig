@@ -123,12 +123,6 @@ pub fn DestTraits(comptime T: type) type {
     };
 }
 
-/// Discriminates checked vs unchecked evaluation capability.
-pub fn UncheckedSourceKind(comptime T: type) SourceAccessKind {
-    return SourceTraits(T).unchecked_kind orelse
-        sourceContractError(T, "must implement evalAtUnchecked() or readVecUnchecked() to support unchecked access");
-}
-
 // ============================================================================
 // MARK: Interface Validation
 // ============================================================================
@@ -189,7 +183,7 @@ fn FirstLaneTupleType(comptime T: type) type {
 }
 
 /// Scalar type produced by taking the first lane from a source result.
-pub fn FirstLaneType(comptime T: type) type {
+fn FirstLaneType(comptime T: type) type {
     const info = @typeInfo(T);
     return switch (info) {
         .vector => |v| v.child,
@@ -227,7 +221,7 @@ pub fn firstLane(result: anytype) FirstLaneType(@TypeOf(result)) {
 }
 
 /// The scalar value type a source produces when only lane 0 is requested.
-pub fn SourceScalarValueType(comptime SourceType: type) type {
+fn SourceScalarValueType(comptime SourceType: type) type {
     const Traits = SourceTraits(SourceType);
     return switch (comptime Traits.kind) {
         .eval => FirstLaneType(EvalReturnType(SourceType, 1, "evalAt")),

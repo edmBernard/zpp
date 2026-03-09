@@ -21,7 +21,7 @@ const zpp = @import("zpp");
 
 const u8v = zpp.u8v;
 const f32v = zpp.VectorLike(u8v, f32);
-const la = zpp.zla.with(f32v);
+const la = zpp.zla.With(f32v);
 const Vec2 = la.Vec2;
 const Vec3 = la.Vec3;
 const Mat2x2 = la.Mat2x2;

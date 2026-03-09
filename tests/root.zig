@@ -7,6 +7,7 @@ const std = @import("std");
 // Import all test modules to run their tests
 comptime {
     _ = @import("math_test.zig");
+    _ = @import("root_api_test.zig");
     _ = @import("region_test.zig");
     _ = @import("loop_test.zig");
     _ = @import("generate_test.zig");

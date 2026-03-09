@@ -4,10 +4,10 @@ const std = @import("std");
 ///
 /// Usage:
 /// ```
-/// const zla = @import("zla").with(@Vector(4, f32));
+/// const zla = @import("zla").With(@Vector(4, f32));
 /// const v = zla.Vec2{ .x = @splat(1.0), .y = @splat(2.0) };
 /// ```
-pub fn with(comptime VectorType: type) type {
+pub fn With(comptime VectorType: type) type {
     const vec_info = @typeInfo(VectorType).vector;
 
     return struct {
@@ -277,7 +277,7 @@ fn expectVecEqual(comptime len: comptime_int, actual: @Vector(len, f32), expecte
     }
 }
 
-const zla_f32 = with(@Vector(4, f32));
+const zla_f32 = With(@Vector(4, f32));
 
 // MARK: Tests Vec2
 
@@ -523,7 +523,7 @@ test "splat" {
 // MARK: Multi-type test
 
 test "instantiate with i32 vector" {
-    const zla_i32 = with(@Vector(4, i32));
+    const zla_i32 = With(@Vector(4, i32));
     const v = zla_i32.Vec2{ .x = zla_i32.splat(2), .y = zla_i32.splat(3) };
     const r = v.mul1(zla_i32.splat(4));
     try testing.expect(std.meta.eql(r.x, zla_i32.splat(8)));

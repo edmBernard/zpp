@@ -19,7 +19,7 @@ fn deriveSourceVecLen(comptime SourceType: type) comptime_int {
     @compileError(@typeName(SourceType) ++ " does not expose enough type information to infer a group vector length");
 }
 
-fn requireVectorValueType(comptime SourceType: type, comptime vec_len: comptime_int) type {
+fn RequireVectorValueType(comptime SourceType: type, comptime vec_len: comptime_int) type {
     const ValueT = sources.SourceValueType(SourceType, vec_len);
     if (@typeInfo(ValueT) != .vector) {
         @compileError(@typeName(SourceType) ++ " must evaluate to a vector type to be used with group/ungroup");
@@ -36,7 +36,7 @@ fn requireVectorValueType(comptime SourceType: type, comptime vec_len: comptime_
 pub fn GroupSource(comptime NestedSource: type, comptime P: comptime_int, comptime Q: comptime_int) type {
     const NestedInfo = sources.SourceTraits(NestedSource);
     const vec_len = deriveSourceVecLen(NestedSource);
-    const VecT = requireVectorValueType(NestedSource, vec_len);
+    const VecT = RequireVectorValueType(NestedSource, vec_len);
     const ResultTuple = VecTuple(P * Q, VecT);
     const ElemT = @typeInfo(VecT).vector.child;
     const WideVecT = @Vector(P * vec_len, ElemT);
@@ -263,7 +263,7 @@ pub fn GroupAccessor(comptime SrcType: type, comptime VecT: type, comptime P: co
     const NestedType = @TypeOf(@as(SrcType, undefined).nested);
     const NestedInfo = sources.SourceTraits(NestedType);
     const vec_len = @typeInfo(VecT).vector.len;
-    const ValueT = requireVectorValueType(NestedType, vec_len);
+    const ValueT = RequireVectorValueType(NestedType, vec_len);
     const ResultTuple = VecTuple(P * Q, ValueT);
     const ElemT = @typeInfo(ValueT).vector.child;
     // Wide vector for reading P pixels at once per row

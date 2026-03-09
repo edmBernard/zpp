@@ -25,7 +25,7 @@ const zpp = @import("zpp");
 
 const f32v = zpp.f32v;
 const vec_len = @typeInfo(f32v).vector.len;
-const la = zpp.zla.with(f32v);
+const la = zpp.zla.With(f32v);
 const Vec2 = la.Vec2;
 const Vec3 = la.Vec3;
 

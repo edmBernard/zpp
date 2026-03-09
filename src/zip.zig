@@ -67,7 +67,7 @@ fn suggestedSourceVecLen(comptime SourceType: type) ?comptime_int {
     return null;
 }
 
-fn sourceValueTupleType(comptime SourceTypes: anytype, comptime vec_len: comptime_int) type {
+fn SourceValueTupleType(comptime SourceTypes: anytype, comptime vec_len: comptime_int) type {
     var types: [SourceTypes.len]type = undefined;
     inline for (SourceTypes, 0..) |SourceType, i| {
         types[i] = sources.SourceValueType(SourceType, vec_len);
@@ -75,7 +75,7 @@ fn sourceValueTupleType(comptime SourceTypes: anytype, comptime vec_len: comptim
     return std.meta.Tuple(&types);
 }
 
-fn accessorVecType(comptime SourceType: type, comptime BaseVecT: type) type {
+fn AccessorVecType(comptime SourceType: type, comptime BaseVecT: type) type {
     const Traits = sources.SourceTraits(SourceType);
     if (Traits.kind == .read) {
         return @Vector(@typeInfo(BaseVecT).vector.len, Traits.output_scalar_type);
@@ -154,7 +154,7 @@ fn deriveVecLen(comptime SourceTypes: anytype) comptime_int {
 /// When processed, the kernel receives an array of values.
 pub fn ZipSource(comptime source_count: comptime_int, comptime SourceTypes: [source_count]type) type {
     const vec_len = deriveVecLen(SourceTypes);
-    const ResultTuple = sourceValueTupleType(SourceTypes, vec_len);
+    const ResultTuple = SourceValueTupleType(SourceTypes, vec_len);
 
     return struct {
         sources: SourceTuple(&SourceTypes),
@@ -345,7 +345,7 @@ pub fn unzip(zipped: anytype) UnzipResultType(@TypeOf(zipped)) {
 pub fn ZipAccessor(comptime SrcType: type, comptime VecT: type) type {
     const source_count = SrcType.count;
     const SourceTypes = @typeInfo(SrcType.Sources).@"struct".fields;
-    const ResultTuple = sourceValueTupleType(sourceTypesFromTuple(SrcType.Sources), @typeInfo(VecT).vector.len);
+    const ResultTuple = SourceValueTupleType(sourceTypesFromTuple(SrcType.Sources), @typeInfo(VecT).vector.len);
     const InputAccessor = @import("loop.zig").InputAccessor;
 
     return struct {
@@ -363,7 +363,7 @@ pub fn ZipAccessor(comptime SrcType: type, comptime VecT: type) type {
             var result: ResultTuple = undefined;
             inline for (0..source_count) |i| {
                 const SourceT = SourceTypes[i].type;
-                const Accessor = InputAccessor(SourceT, accessorVecType(SourceT, VecT));
+                const Accessor = InputAccessor(SourceT, AccessorVecType(SourceT, VecT));
                 const accessor = Accessor{
                     .source = self.source.sources[i],
                     .current_x = self.current_x,

@@ -11,7 +11,7 @@ A SIMD pixel processing library for Zig, designed for image manipulation using e
 - **Flexible Region Processing**: Process arbitrary rectangular regions with margin support
 - **Multiple Interpolation Methods**: Nearest neighbor, bilinear, and bicubic sampling
 - **Configurable Padding**: Edge repeat or zero padding for boundary handling
-- **Multi-Channel Support**: Native RGB output with automatic interleaving
+- **Multi-Channel Support**: Native RGB output with interleaved destinations
 - **Row Caching**: Efficient caching for kernels requiring vertical neighborhood access
 
 ## Requirements
@@ -55,15 +55,14 @@ Add to your `build.zig.zon`:
 
 ## Quick Start
 
-Here's a simple example that generates a gradient image:
+Here's a simple example that generates an RGB gradient:
 
 ```zig
 const std = @import("std");
 const zpp = @import("zpp");
 
-// Use platform-optimal vector length
-const vec_len = zpp.suggested_vec_len;
-const f32v = @Vector(vec_len, f32);
+const u8v = zpp.u8v;
+const f32v = zpp.VectorLike(u8v, f32);
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -90,11 +89,17 @@ pub fn main() !void {
             height: f32v,
         };
 
-        fn process(ctx: Context, x: f32v, y: f32v) [3]f32v {
-            const r = x / ctx.width;       // Red increases left to right
-            const g = y / ctx.height;      // Green increases top to bottom
-            const b: f32v = @splat(0.5); // Constant blue
-            return .{ r, g, b };
+        fn toBytes(value: f32v) u8v {
+            const zero: f32v = @splat(0.0);
+            const max_byte: f32v = @splat(255.0);
+            return @intFromFloat(@max(zero, @min(max_byte, value * max_byte)));
+        }
+
+        fn process(ctx: Context, x: f32v, y: f32v) [3]u8v {
+            const r = x / ctx.width;   // Red increases left to right.
+            const g = y / ctx.height;  // Green increases top to bottom.
+            const b: f32v = @splat(0.5);
+            return .{ toBytes(r), toBytes(g), toBytes(b) };
         }
     };
 
@@ -146,21 +151,23 @@ const v_margin = zpp.Margin.vertical(1);   // 1 pixel vertically only
 
 ```zig
 // Basic input (uses edge-repeat padding by default)
-const source = try zpp.makeSource(f32, &input_data, stride, region);
+const source = try zpp.makeSource(f32, input_data[0..], stride, region);
 
 // Input with explicit zero padding
-const source_zero = try zpp.makePaddedSource(f32, zpp.ZeroPadding, &input_data, stride, region);
+const source_zero = try zpp.makePaddedSource(f32, zpp.ZeroPadding, input_data[0..], stride, region);
 ```
 
 **Output destinations** write processed results:
 
 ```zig
 // Single-channel output
-const dest = try zpp.makeDest(f32, &output_data, stride, region);
+const dest = try zpp.makeDest(f32, output_data[0..], stride, region);
 
-// RGB interleaved output (3 channels, automatically converts float [0,1] to u8 [0,255])
-const rgb_dest = try zpp.makeInterleavedDest(u8, 3, &rgb_data, width, region);
+// RGB interleaved output (3 channels, values must already be `u8`)
+const rgb_dest = try zpp.makeInterleavedDest(u8, 3, rgb_data[0..], width, region);
 ```
+
+All destination and source constructors validate the region origin, row width/stride, and buffer size up front.
 
 ### Kernels
 
@@ -271,6 +278,7 @@ const resized = zpp.interpLoop(
 |--------|-------------|
 | `Region`, `Margin` | Rectangular areas and neighborhood specification |
 | `makeSource`, `makeDest`, `makeInterleavedDest` | Input/output buffer wrappers |
+| `suggested_vec_len`, `f32v`, `u8v`, `VectorLike` | SIMD convenience helpers |
 | `generate`, `loop`, `process` | Core processing primitives |
 | `interpLoop` | Interpolated sampling for geometric transforms |
 | `translate` | Zero-cost integer pixel offset (shift without interpolation) |
@@ -281,23 +289,23 @@ const resized = zpp.interpLoop(
 
 ### SIMD Math Functions
 
-ZPP provides vectorized versions of common math functions:
+ZPP exposes vectorized math helpers under `zpp.math`:
 
 ```zig
 // Vector creation
-zpp.splat  // Create vector with all elements set to same value
+zpp.math.splat // Create a vector with all elements set to the same value
 
 // Basic operations
-zpp.abs, zpp.floor, zpp.ceil, zpp.trunc, zpp.round, zpp.sqrt
+zpp.math.abs, zpp.math.floor, zpp.math.ceil, zpp.math.trunc, zpp.math.round, zpp.math.sqrt
 
 // Trigonometric
-zpp.sin, zpp.cos, zpp.tan, zpp.atan2
+zpp.math.sin, zpp.math.cos, zpp.math.tan, zpp.math.atan2
 
 // Exponential/Logarithmic
-zpp.exp, zpp.exp2, zpp.log, zpp.log2, zpp.log10
+zpp.math.exp, zpp.math.exp2, zpp.math.log, zpp.math.log2, zpp.math.log10
 
 // Utility
-zpp.sign, zpp.pow, zpp.min, zpp.max, zpp.clamp, zpp.lerp, zpp.fma
+zpp.math.sign, zpp.math.pow, zpp.math.min, zpp.math.max, zpp.math.clamp, zpp.math.lerp, zpp.math.fma
 ```
 
 ### Padding Strategies
