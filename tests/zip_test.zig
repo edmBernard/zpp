@@ -5,6 +5,8 @@ const zpp = @import("zpp");
 const th = @import("test_helpers.zig");
 
 const f32x4 = @Vector(4, f32);
+const u8x4 = @Vector(4, u8);
+const u16x4 = @Vector(4, u16);
 
 // MARK: Zip: two sources add correctly
 test "Zip: two sources add correctly" {
@@ -291,6 +293,70 @@ test "Zip: Unzip split source correctly" {
         5, 6, 7, 8,
     };
     try std.testing.expectEqual(expected_data, output_data);
+}
+
+test "Zip: direct process preserves mixed integer channel types" {
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
+
+    const input_a: [8]u8 = .{ 1, 2, 3, 4, 5, 6, 7, 8 };
+    const input_b: [8]u16 = .{ 10, 20, 30, 40, 50, 60, 70, 80 };
+    var output_a = [_]u8{0} ** 8;
+    var output_b = [_]u16{0} ** 8;
+
+    const source_a = try zpp.makeSource(u8, &input_a, region.width, region);
+    const source_b = try zpp.makeSource(u16, &input_b, region.width, region);
+    const dest_a = try zpp.makeDest(u8, &output_a, region.width, region);
+    const dest_b = try zpp.makeDest(u16, &output_b, region.width, region);
+
+    zpp.process(zpp.zip(.{ source_a, source_b }), zpp.zipDest(.{ dest_a, dest_b }));
+
+    try std.testing.expectEqual(input_a, output_a);
+    try std.testing.expectEqual(input_b, output_b);
+}
+
+test "Zip: unzip preserves non-f32 channel types" {
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
+
+    const input_a: [8]u8 = .{ 8, 7, 6, 5, 4, 3, 2, 1 };
+    const input_b: [8]u16 = .{ 100, 200, 300, 400, 500, 600, 700, 800 };
+    var output_a = [_]u8{0} ** 8;
+    var output_b = [_]u16{0} ** 8;
+
+    const source_a = try zpp.makeSource(u8, &input_a, region.width, region);
+    const source_b = try zpp.makeSource(u16, &input_b, region.width, region);
+    const unzipped = zpp.unzip(zpp.zip(.{ source_a, source_b }));
+
+    zpp.process(unzipped[0], try zpp.makeDest(u8, &output_a, region.width, region));
+    zpp.process(unzipped[1], try zpp.makeDest(u16, &output_b, region.width, region));
+
+    try std.testing.expectEqual(input_a, output_a);
+    try std.testing.expectEqual(input_b, output_b);
+}
+
+test "Zip: loop can consume mixed integer channel types" {
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
+
+    const input_a: [8]u8 = .{ 1, 2, 3, 4, 5, 6, 7, 8 };
+    const input_b: [8]u16 = .{ 10, 20, 30, 40, 50, 60, 70, 80 };
+    var output = [_]u16{0} ** 8;
+
+    const source_a = try zpp.makeSource(u8, &input_a, region.width, region);
+    const source_b = try zpp.makeSource(u16, &input_b, region.width, region);
+    const destination = try zpp.makeDest(u16, &output, region.width, region);
+
+    const kernel = struct {
+        fn process(ctx: anytype, in: anytype) u16x4 {
+            _ = ctx;
+            const a, const b = in.get();
+            return @as(u16x4, @intCast(a)) + b;
+        }
+    };
+
+    const result = zpp.loop(u8x4, .{}, zpp.zip(.{ source_a, source_b }), .{}, kernel.process);
+    zpp.process(result, destination);
+
+    const expected = [_]u16{ 11, 22, 33, 44, 55, 66, 77, 88 };
+    try std.testing.expectEqual(expected, output);
 }
 
 // MARK: Zip: Unzip split source correctly and process

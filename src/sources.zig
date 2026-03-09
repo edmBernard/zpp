@@ -174,6 +174,11 @@ fn EvalReturnType(comptime SourceType: type, comptime vec_len: comptime_int, com
     }
 }
 
+/// The value type a source produces for the requested vector length.
+pub fn SourceValueType(comptime SourceType: type, comptime vec_len: comptime_int) type {
+    return EvalReturnType(SourceType, vec_len, "evalAt");
+}
+
 /// Evaluate a source at position (x, y) using checked reads.
 pub inline fn evalSourceChecked(comptime SourceType: type, source: SourceType, comptime vec_len: comptime_int, x: i32, y: i32) EvalReturnType(SourceType, vec_len, "evalAt") {
     const Traits = SourceTraits(SourceType);

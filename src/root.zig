@@ -26,12 +26,17 @@ const cache = @import("cache.zig");
 // MARK: Re-exported Types and Constants
 // ============================================================================
 
-/// Default vector length - uses platform optimal size based on u8 processing
+fn suggestedVectorType(comptime T: type) type {
+    return @Vector(std.simd.suggestVectorLength(T) orelse 1, T);
+}
+
+/// Convenience alias for a platform-suggested SIMD lane count.
 pub const suggested_vec_len = std.simd.suggestVectorLength(u8) orelse 1;
-pub const f32v = @Vector(std.simd.suggestVectorLength(f32) orelse 1, f32);
-pub const i32v = @Vector(std.simd.suggestVectorLength(i32) orelse 1, i32);
-pub const u16v = @Vector(std.simd.suggestVectorLength(u16) orelse 1, u16);
-pub const u8v = @Vector(std.simd.suggestVectorLength(u8) orelse 1, u8);
+/// Convenience aliases for common SIMD types; the API does not require them.
+pub const f32v = suggestedVectorType(f32);
+pub const i32v = suggestedVectorType(i32);
+pub const u16v = suggestedVectorType(u16);
+pub const u8v = suggestedVectorType(u8);
 
 // TODO: add tests for this utility
 /// Method to create a vector type compatible with a given vector type but with a different scalar type.

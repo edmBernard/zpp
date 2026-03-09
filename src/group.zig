@@ -6,9 +6,25 @@ const zip = @import("zip.zig");
 const Region = @import("region.zig").Region;
 const VecTuple = zip.VecTuple;
 
-/// Get vector length from a source type, defaulting to 4.
-fn getSourceVecLen(comptime SourceType: type) comptime_int {
-    return zip.getSourceVecLen(SourceType) orelse 4;
+fn deriveSourceVecLen(comptime SourceType: type) comptime_int {
+    if (zip.getSourceVecLen(SourceType)) |len| {
+        return len;
+    }
+
+    const Traits = sources.SourceTraits(SourceType);
+    if (Traits.has_output_scalar_type) {
+        return std.simd.suggestVectorLength(Traits.output_scalar_type) orelse 1;
+    }
+
+    @compileError(@typeName(SourceType) ++ " does not expose enough type information to infer a group vector length");
+}
+
+fn requireVectorValueType(comptime SourceType: type, comptime vec_len: comptime_int) type {
+    const ValueT = sources.SourceValueType(SourceType, vec_len);
+    if (@typeInfo(ValueT) != .vector) {
+        @compileError(@typeName(SourceType) ++ " must evaluate to a vector type to be used with group/ungroup");
+    }
+    return ValueT;
 }
 
 // ============================================================================
@@ -19,9 +35,8 @@ fn getSourceVecLen(comptime SourceType: type) comptime_int {
 /// This is useful for Bayer pattern processing where you want to treat 2x2 blocks as units.
 pub fn GroupSource(comptime NestedSource: type, comptime P: comptime_int, comptime Q: comptime_int) type {
     const NestedInfo = sources.SourceTraits(NestedSource);
-    // Derive vector length from nested source
-    const vec_len = getSourceVecLen(NestedSource);
-    const VecT = @Vector(vec_len, f32);
+    const vec_len = deriveSourceVecLen(NestedSource);
+    const VecT = requireVectorValueType(NestedSource, vec_len);
     const ResultTuple = VecTuple(P * Q, VecT);
     const ElemT = @typeInfo(VecT).vector.child;
     const WideVecT = @Vector(P * vec_len, ElemT);
@@ -42,6 +57,7 @@ pub fn GroupSource(comptime NestedSource: type, comptime P: comptime_int, compti
 
         /// The vector type used by this GroupSource
         pub const VectorType = VecT;
+        pub const OutputType = ResultTuple;
 
         const Self = @This();
 
@@ -100,9 +116,8 @@ pub fn group(comptime P: comptime_int, comptime Q: comptime_int, source: anytype
 /// An ungrouped source that extracts individual pixels from a grouped source.
 /// Reverses the grouping operation.
 pub fn UngroupSource(comptime GroupedSource: type, comptime P: comptime_int, comptime Q: comptime_int) type {
-    // Derive vector length from the grouped source
-    const vec_len = getSourceVecLen(GroupedSource);
-    const VecT = @Vector(vec_len, f32);
+    const vec_len = deriveSourceVecLen(GroupedSource);
+    const VecT = GroupedSource.VectorType;
 
     return struct {
         grouped: GroupedSource,
@@ -110,6 +125,7 @@ pub fn UngroupSource(comptime GroupedSource: type, comptime P: comptime_int, com
 
         /// Number of elements processed per evalAt call
         pub const vector_length = vec_len;
+        pub const OutputType = VecT;
 
         const Self = @This();
 
@@ -125,8 +141,14 @@ pub fn UngroupSource(comptime GroupedSource: type, comptime P: comptime_int, com
             const grouped_values = self.grouped.evalAt(group_x, group_y);
 
             // Extract the appropriate pixel
-            const idx = local_y * P + local_x;
-            return grouped_values[idx];
+            inline for (0..Q) |dy| {
+                inline for (0..P) |dx| {
+                    if (local_x == dx and local_y == dy) {
+                        return grouped_values[dy * P + dx];
+                    }
+                }
+            }
+            unreachable;
         }
     };
 }
@@ -240,9 +262,10 @@ pub fn groupDest(comptime P: comptime_int, comptime Q: comptime_int, dest: anyty
 pub fn GroupAccessor(comptime SrcType: type, comptime VecT: type, comptime P: comptime_int, comptime Q: comptime_int) type {
     const NestedType = @TypeOf(@as(SrcType, undefined).nested);
     const NestedInfo = sources.SourceTraits(NestedType);
-    const ResultTuple = VecTuple(P * Q, VecT);
     const vec_len = @typeInfo(VecT).vector.len;
-    const ElemT = @typeInfo(VecT).vector.child;
+    const ValueT = requireVectorValueType(NestedType, vec_len);
+    const ResultTuple = VecTuple(P * Q, ValueT);
+    const ElemT = @typeInfo(ValueT).vector.child;
     // Wide vector for reading P pixels at once per row
     const WideVecT = @Vector(P * vec_len, ElemT);
 
@@ -290,7 +313,7 @@ pub fn GroupAccessor(comptime SrcType: type, comptime VecT: type, comptime P: co
         }
 
         /// Get a specific pixel within the group at offset (dx, dy)
-        pub inline fn getPixel(self: Self, dx: i32, dy: i32, px: usize, py: usize) VecT {
+        pub inline fn getPixel(self: Self, dx: i32, dy: i32, px: usize, py: usize) ValueT {
             const grouped = self.getAt(dx, dy);
             return grouped[py * P + px];
         }

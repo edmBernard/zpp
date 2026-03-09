@@ -516,12 +516,21 @@ fn firstLane(result: anytype) FirstLaneType(@TypeOf(result)) {
     }
 }
 
+fn FirstLaneTupleType(comptime T: type) type {
+    const fields = @typeInfo(T).@"struct".fields;
+    var types: [fields.len]type = undefined;
+    inline for (fields, 0..) |field, i| {
+        types[i] = FirstLaneType(field.type);
+    }
+    return std.meta.Tuple(&types);
+}
+
 fn FirstLaneType(comptime T: type) type {
     const info = @typeInfo(T);
     return switch (info) {
         .vector => |v| v.child,
         .array => |a| [a.len]FirstLaneType(a.child),
-        .@"struct" => |s| [s.fields.len]FirstLaneType(s.fields[0].type),
+        .@"struct" => |s| if (s.is_tuple) FirstLaneTupleType(T) else @compileError("Unsupported struct type for FirstLaneType: " ++ @typeName(T)),
         else => @compileError("Unsupported type for FirstLaneType: " ++ @typeName(T)),
     };
 }

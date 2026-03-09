@@ -34,6 +34,55 @@ pub fn tupleLen(comptime TupleType: type) comptime_int {
     return @typeInfo(TupleType).@"struct".fields.len;
 }
 
+fn innerVectorLen(comptime T: type) ?comptime_int {
+    switch (@typeInfo(T)) {
+        .vector => |info| return info.len,
+        .array => |info| {
+            if (@typeInfo(info.child) == .vector) {
+                return @typeInfo(info.child).vector.len;
+            }
+        },
+        .@"struct" => |info| {
+            if (info.is_tuple and info.fields.len > 0) {
+                return innerVectorLen(info.fields[0].type);
+            }
+        },
+        else => {},
+    }
+    return null;
+}
+
+fn suggestedSourceVecLen(comptime SourceType: type) ?comptime_int {
+    const Traits = sources.SourceTraits(SourceType);
+    if (Traits.has_output_scalar_type) {
+        return std.simd.suggestVectorLength(Traits.output_scalar_type) orelse 1;
+    }
+    if (Traits.has_output_type) {
+        return innerVectorLen(Traits.output_type);
+    }
+    if (Traits.has_eval) {
+        const fn_info = @typeInfo(@TypeOf(SourceType.evalAt)).@"fn";
+        return innerVectorLen(fn_info.return_type.?);
+    }
+    return null;
+}
+
+fn sourceValueTupleType(comptime SourceTypes: anytype, comptime vec_len: comptime_int) type {
+    var types: [SourceTypes.len]type = undefined;
+    inline for (SourceTypes, 0..) |SourceType, i| {
+        types[i] = sources.SourceValueType(SourceType, vec_len);
+    }
+    return std.meta.Tuple(&types);
+}
+
+fn accessorVecType(comptime SourceType: type, comptime BaseVecT: type) type {
+    const Traits = sources.SourceTraits(SourceType);
+    if (Traits.kind == .read) {
+        return @Vector(@typeInfo(BaseVecT).vector.len, Traits.output_scalar_type);
+    }
+    return BaseVecT;
+}
+
 /// Helper to detect if a type is a ZipSource
 pub fn isZipSourceType(comptime T: type) bool {
     return sources.hasSourceTag(T, .zip);
@@ -54,20 +103,47 @@ pub fn getSourceVecLen(comptime SourceType: type) ?comptime_int {
     if (@hasDecl(SourceType, "vector_length")) {
         return SourceType.vector_length;
     }
+    if (@hasDecl(SourceType, "OutputType")) {
+        return innerVectorLen(SourceType.OutputType);
+    }
+    if (@hasDecl(SourceType, "evalAt")) {
+        const fn_info = @typeInfo(@TypeOf(SourceType.evalAt)).@"fn";
+        return innerVectorLen(fn_info.return_type.?);
+    }
     return null;
 }
 
 /// Derive vector length from an array of source types.
-/// Returns the first source's vector_length if any has one, otherwise returns 4
-/// (a conservative default for direct Process calls).
+/// If sources declare a vector width, they must agree.
+/// Otherwise, use the smallest platform-suggested width across the nested scalars.
 fn deriveVecLen(comptime SourceTypes: anytype) comptime_int {
-    for (SourceTypes) |ST| {
+    var explicit_len: ?comptime_int = null;
+    inline for (SourceTypes) |ST| {
         if (getSourceVecLen(ST)) |len| {
-            return len;
+            if (explicit_len) |existing| {
+                if (existing != len) {
+                    @compileError("Zip requires all nested sources to agree on vector length");
+                }
+            } else {
+                explicit_len = len;
+            }
         }
     }
-    // Conservative default for direct Process calls without Loop wrapper
-    return 4;
+    if (explicit_len) |len| {
+        return len;
+    }
+
+    var suggested_len: ?comptime_int = null;
+    inline for (SourceTypes) |ST| {
+        if (suggestedSourceVecLen(ST)) |len| {
+            suggested_len = if (suggested_len) |existing| @min(existing, len) else len;
+        }
+    }
+    if (suggested_len) |len| {
+        return len;
+    }
+
+    @compileError("Zip could not infer a vector length from nested sources; expose vector_length or OutputScalarType");
 }
 
 // ============================================================================
@@ -77,11 +153,8 @@ fn deriveVecLen(comptime SourceTypes: anytype) comptime_int {
 /// A zipped source that combines N source expressions.
 /// When processed, the kernel receives an array of values.
 pub fn ZipSource(comptime source_count: comptime_int, comptime SourceTypes: [source_count]type) type {
-    // Derive vector length from nested sources, defaulting to 4 if none specify it
     const vec_len = deriveVecLen(SourceTypes);
-
-    const VecT = @Vector(vec_len, f32);
-    const ResultTuple = VecTuple(source_count, VecT);
+    const ResultTuple = sourceValueTupleType(SourceTypes, vec_len);
 
     return struct {
         sources: SourceTuple(&SourceTypes),
@@ -98,8 +171,8 @@ pub fn ZipSource(comptime source_count: comptime_int, comptime SourceTypes: [sou
         /// Number of elements processed per evalAt call
         pub const vector_length = vec_len;
 
-        /// The vector type used by this ZipSource
-        pub const VectorType = VecT;
+        /// The value type produced by this ZipSource.
+        pub const OutputType = ResultTuple;
 
         const Self = @This();
 
@@ -214,7 +287,7 @@ pub fn UnzipSource(comptime ZippedSource: type, comptime channel: usize) type {
 
     // Derive vector length from the zipped source
     const vec_len = ZippedSource.vector_length;
-    const VecT = @Vector(vec_len, f32);
+    const ValueT = sources.SourceValueType(NestedSourceType, vec_len);
 
     return struct {
         zipped: ZippedSource,
@@ -222,6 +295,7 @@ pub fn UnzipSource(comptime ZippedSource: type, comptime channel: usize) type {
 
         /// Number of elements processed per evalAt call
         pub const vector_length = vec_len;
+        pub const OutputType = ValueT;
 
         const Self = @This();
 
@@ -231,7 +305,7 @@ pub fn UnzipSource(comptime ZippedSource: type, comptime channel: usize) type {
         }
 
         /// For expression tree chaining - evaluate at position
-        pub inline fn evalAt(self: Self, x: i32, y: i32) VecT {
+        pub inline fn evalAt(self: Self, x: i32, y: i32) ValueT {
             return sources.evalSourceChecked(NestedSourceType, self.getNestedSource(), vec_len, x, y);
         }
     };
@@ -271,7 +345,7 @@ pub fn unzip(zipped: anytype) UnzipResultType(@TypeOf(zipped)) {
 pub fn ZipAccessor(comptime SrcType: type, comptime VecT: type) type {
     const source_count = SrcType.count;
     const SourceTypes = @typeInfo(SrcType.Sources).@"struct".fields;
-    const ResultTuple = VecTuple(source_count, VecT);
+    const ResultTuple = sourceValueTupleType(sourceTypesFromTuple(SrcType.Sources), @typeInfo(VecT).vector.len);
     const InputAccessor = @import("loop.zig").InputAccessor;
 
     return struct {
@@ -289,7 +363,7 @@ pub fn ZipAccessor(comptime SrcType: type, comptime VecT: type) type {
             var result: ResultTuple = undefined;
             inline for (0..source_count) |i| {
                 const SourceT = SourceTypes[i].type;
-                const Accessor = InputAccessor(SourceT, VecT);
+                const Accessor = InputAccessor(SourceT, accessorVecType(SourceT, VecT));
                 const accessor = Accessor{
                     .source = self.source.sources[i],
                     .current_x = self.current_x,

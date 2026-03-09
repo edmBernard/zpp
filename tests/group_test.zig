@@ -4,6 +4,7 @@ const std = @import("std");
 const zpp = @import("zpp");
 
 const f32x4 = @Vector(4, f32);
+const u16x4 = @Vector(4, u16);
 
 // MARK: Group: 2x2 source downscales region correctly
 test "Group: 2x2 source downscales region correctly" {
@@ -301,4 +302,85 @@ test "Group: space to depth 2x2 rearrangement with intermediate kernel" {
         14, 16,
     };
     try std.testing.expectEqual(expected_data_d, output_data_d);
+}
+
+test "Group: direct space-to-depth preserves u16 lanes" {
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 4 };
+
+    const input: [16]u16 = .{
+        1,  2,  3,  4,
+        5,  6,  7,  8,
+        9,  10, 11, 12,
+        13, 14, 15, 16,
+    };
+    var output_a: [4]u16 = .{ 0, 0, 0, 0 };
+    var output_b: [4]u16 = .{ 0, 0, 0, 0 };
+    var output_c: [4]u16 = .{ 0, 0, 0, 0 };
+    var output_d: [4]u16 = .{ 0, 0, 0, 0 };
+
+    const source = try zpp.makeSource(u16, &input, region.width, region);
+    const grouped = zpp.group(2, 2, source);
+    const grouped_region = grouped.region;
+
+    zpp.process(
+        grouped,
+        zpp.zipDest(.{
+            try zpp.makeDest(u16, &output_a, grouped_region.width, grouped_region),
+            try zpp.makeDest(u16, &output_b, grouped_region.width, grouped_region),
+            try zpp.makeDest(u16, &output_c, grouped_region.width, grouped_region),
+            try zpp.makeDest(u16, &output_d, grouped_region.width, grouped_region),
+        }),
+    );
+
+    try std.testing.expectEqual([4]u16{ 1, 3, 9, 11 }, output_a);
+    try std.testing.expectEqual([4]u16{ 2, 4, 10, 12 }, output_b);
+    try std.testing.expectEqual([4]u16{ 5, 7, 13, 15 }, output_c);
+    try std.testing.expectEqual([4]u16{ 6, 8, 14, 16 }, output_d);
+}
+
+test "Group: ungroup round-trip preserves u16 source values" {
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 4 };
+
+    const input: [16]u16 = .{
+        1,  2,  3,  4,
+        5,  6,  7,  8,
+        9,  10, 11, 12,
+        13, 14, 15, 16,
+    };
+    var output = [_]u16{0} ** 16;
+
+    const source = try zpp.makeSource(u16, &input, region.width, region);
+    const destination = try zpp.makeDest(u16, &output, region.width, region);
+
+    zpp.process(zpp.ungroup(2, 2, zpp.group(2, 2, source)), destination);
+
+    try std.testing.expectEqual(input, output);
+}
+
+test "Group: loop accessor preserves grouped integer vectors" {
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 4 };
+
+    const input: [16]u16 = .{
+        1,  2,  3,  4,
+        5,  6,  7,  8,
+        9,  10, 11, 12,
+        13, 14, 15, 16,
+    };
+    var output = [_]u16{0} ** 4;
+
+    const source = try zpp.makeSource(u16, &input, region.width, region);
+    const grouped = zpp.group(2, 2, source);
+    const destination = try zpp.makeDest(u16, &output, grouped.region.width, grouped.region);
+
+    const kernel = struct {
+        fn process(ctx: anytype, in: anytype) u16x4 {
+            _ = ctx;
+            const a, const b, const c, const d = in.get();
+            return a + b + c + d;
+        }
+    };
+
+    zpp.process(zpp.loop(u16x4, .{}, grouped, .{}, kernel.process), destination);
+
+    try std.testing.expectEqual([4]u16{ 14, 22, 46, 54 }, output);
 }
