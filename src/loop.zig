@@ -370,6 +370,8 @@ const getSourceVecLen = zip.getSourceVecLen;
 /// Supports both single-channel and multi-channel sources.
 /// The destination region drives what gets computed (pull model).
 /// The destination must have write() and writeScalar() methods matching the source output type.
+/// `write()` handles full SIMD batches; `writeScalar()` is used for checked remainder
+/// pixels when overlapping vector writes are not part of the destination contract.
 ///
 /// When the source supports it (LoopResult with margins over an InputSource),
 /// splits each row into left-edge / interior / right-edge strips. The interior
@@ -411,6 +413,7 @@ pub fn process(source: anytype, dest: anytype) void {
 
 const evalSourceChecked = sources.evalSourceChecked;
 const evalSourceUnchecked = sources.evalSourceUnchecked;
+const readSourceScalarChecked = sources.readSourceScalarChecked;
 
 /// Standard processing path without split iteration.
 fn processStandard(
@@ -490,51 +493,6 @@ fn processSplit(
     }
 }
 
-/// Extract the first SIMD lane from a result value.
-/// For vectors: returns the scalar at lane 0.
-/// For struct tuples (from Zip/Group): returns an array of scalars from each element's lane 0.
-fn firstLane(result: anytype) FirstLaneType(@TypeOf(result)) {
-    const T = @TypeOf(result);
-    const info = @typeInfo(T);
-    switch (info) {
-        .vector => return result[0],
-        .array => |a| {
-            var out: [a.len]FirstLaneType(a.child) = undefined;
-            inline for (0..a.len) |i| {
-                out[i] = firstLane(result[i]);
-            }
-            return out;
-        },
-        .@"struct" => |s| {
-            var out: FirstLaneType(T) = undefined;
-            inline for (0..s.fields.len) |i| {
-                out[i] = firstLane(result[i]);
-            }
-            return out;
-        },
-        else => @compileError("Unsupported type for firstLane: expected vector, array, or struct tuple"),
-    }
-}
-
-fn FirstLaneTupleType(comptime T: type) type {
-    const fields = @typeInfo(T).@"struct".fields;
-    var types: [fields.len]type = undefined;
-    inline for (fields, 0..) |field, i| {
-        types[i] = FirstLaneType(field.type);
-    }
-    return std.meta.Tuple(&types);
-}
-
-fn FirstLaneType(comptime T: type) type {
-    const info = @typeInfo(T);
-    return switch (info) {
-        .vector => |v| v.child,
-        .array => |a| [a.len]FirstLaneType(a.child),
-        .@"struct" => |s| if (s.is_tuple) FirstLaneTupleType(T) else @compileError("Unsupported struct type for FirstLaneType: " ++ @typeName(T)),
-        else => @compileError("Unsupported type for FirstLaneType: " ++ @typeName(T)),
-    };
-}
-
 /// Process a row segment [x_start, x_stop) using checked (bounds-checking) reads.
 fn processRowChecked(
     comptime SourceType: type,
@@ -563,7 +521,7 @@ fn processRowChecked(
             dest.write(@intCast(aligned_x), @intCast(y_coord), evalSourceChecked(SourceType, source, vec_len, aligned_x, y_coord));
         } else {
             while (x_coord < x_stop) : (x_coord += 1) {
-                dest.writeScalar(@intCast(x_coord), @intCast(y_coord), firstLane(evalSourceChecked(SourceType, source, vec_len, x_coord, y_coord)));
+                dest.writeScalar(@intCast(x_coord), @intCast(y_coord), readSourceScalarChecked(SourceType, source, x_coord, y_coord));
             }
         }
     }

@@ -55,6 +55,41 @@ test "Stats destination: remainder handling with non-aligned width" {
     try std.testing.expectEqual(@as(u32, 5), stats_ctx.count);
 }
 
+test "Stats destination: coords on remainder only expose lane 0" {
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 5, .height = 1 };
+    var input_data: [5]f32 = .{ 1.0, 2.0, 3.0, 4.0, 5.0 };
+    const source = try zpp.makeSource(f32, &input_data, region.width, region);
+
+    const stats_kernel = struct {
+        const Context = struct {
+            weighted_sum: f32 = 0,
+            count: u32 = 0,
+            last_x: i32 = -1,
+            last_y: i32 = -1,
+        };
+
+        fn accumulate(ctx: *Context, values: f32x4, x: @Vector(4, i32), y: @Vector(4, i32)) void {
+            inline for (0..4) |i| {
+                if (values[i] != 0) {
+                    ctx.weighted_sum += values[i] * @as(f32, @floatFromInt(x[i]));
+                    ctx.count += 1;
+                    ctx.last_x = x[i];
+                    ctx.last_y = y[i];
+                }
+            }
+        }
+    };
+
+    var stats_ctx = stats_kernel.Context{};
+    const stats_dest = zpp.statsWithCoords(f32x4, &stats_ctx, region, stats_kernel.accumulate);
+    zpp.process(source, stats_dest);
+
+    try std.testing.expectEqual(@as(f32, 40.0), stats_ctx.weighted_sum);
+    try std.testing.expectEqual(@as(u32, 5), stats_ctx.count);
+    try std.testing.expectEqual(@as(i32, 4), stats_ctx.last_x);
+    try std.testing.expectEqual(@as(i32, 0), stats_ctx.last_y);
+}
+
 // MARK: Stats destination: sum accumulation with aligned width
 test "Stats destination: sum accumulation with aligned width" {
     // Width=4 (aligned to vec_len), 2 rows - ensures no double-counting

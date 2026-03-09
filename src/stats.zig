@@ -28,6 +28,12 @@ pub fn StatsDest(
         pub const InputScalarType = @typeInfo(VecT).vector.child;
         const Self = @This();
 
+        inline fn scalarBatch(value: InputScalarType) VecT {
+            var single: VecT = @splat(value);
+            single[0] = value;
+            return single;
+        }
+
         /// Calls the user's stats kernel on a simd batch.
         pub fn write(self: Self, x: u32, y: u32, values: VecT) void {
             if (has_coords) {
@@ -45,10 +51,9 @@ pub fn StatsDest(
         }
 
         /// "Write" a single scalar value by calling the stats function.
-        /// Only processes lane 0 to avoid overcounting in remainder handling.
+        /// Only lane 0 is populated; the remaining lanes are zeroed for checked remainders.
         pub fn writeScalar(self: Self, x: u32, y: u32, value: InputScalarType) void {
-            var single: VecT = @splat(0);
-            single[0] = value;
+            const single = scalarBatch(value);
 
             if (has_coords) {
                 const xi: i32 = @intCast(x);

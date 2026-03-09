@@ -137,12 +137,11 @@ pub fn PixelInterpolator(comptime SourceType: type, comptime VecT: type, comptim
             return p[0] * w0 + p[1] * w1 + p[2] * w2 + p[3] * w3;
         }
 
-        /// Read a single pixel at integer coordinates, with padding
+        /// Read a single pixel at integer coordinates.
+        /// Interpolation is scalar-native here; each SIMD lane samples independently.
         inline fn readPixel(self: Self, xi: i32, yi: i32) ElemT {
-            return switch (comptime SourceInfo.kind) {
-                .eval => self.source.evalAt(xi, yi)[0],
-                .read => self.source.read(xi, yi),
-            };
+            _ = SourceInfo;
+            return sources.readSourceScalarChecked(SourceType, self.source, xi, yi);
         }
     };
 }

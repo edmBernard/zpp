@@ -179,7 +179,64 @@ pub fn SourceValueType(comptime SourceType: type, comptime vec_len: comptime_int
     return EvalReturnType(SourceType, vec_len, "evalAt");
 }
 
+fn FirstLaneTupleType(comptime T: type) type {
+    const fields = @typeInfo(T).@"struct".fields;
+    var types: [fields.len]type = undefined;
+    inline for (fields, 0..) |field, i| {
+        types[i] = FirstLaneType(field.type);
+    }
+    return std.meta.Tuple(&types);
+}
+
+/// Scalar type produced by taking the first lane from a source result.
+pub fn FirstLaneType(comptime T: type) type {
+    const info = @typeInfo(T);
+    return switch (info) {
+        .vector => |v| v.child,
+        .array => |a| [a.len]FirstLaneType(a.child),
+        .@"struct" => |s| if (s.is_tuple) FirstLaneTupleType(T) else @compileError("Unsupported struct type for FirstLaneType: " ++ @typeName(T)),
+        else => @compileError("Unsupported type for FirstLaneType: " ++ @typeName(T)),
+    };
+}
+
+/// Extract lane 0 from a vector-like source result.
+pub fn firstLane(result: anytype) FirstLaneType(@TypeOf(result)) {
+    const T = @TypeOf(result);
+    const info = @typeInfo(T);
+    switch (info) {
+        .vector => return result[0],
+        .array => |a| {
+            var out: [a.len]FirstLaneType(a.child) = undefined;
+            inline for (0..a.len) |i| {
+                out[i] = firstLane(result[i]);
+            }
+            return out;
+        },
+        .@"struct" => |s| {
+            if (!s.is_tuple) {
+                @compileError("Unsupported struct type for firstLane: " ++ @typeName(T));
+            }
+            var out: FirstLaneType(T) = undefined;
+            inline for (0..s.fields.len) |i| {
+                out[i] = firstLane(result[i]);
+            }
+            return out;
+        },
+        else => @compileError("Unsupported type for firstLane: expected vector, array, or struct tuple"),
+    }
+}
+
+/// The scalar value type a source produces when only lane 0 is requested.
+pub fn SourceScalarValueType(comptime SourceType: type) type {
+    const Traits = SourceTraits(SourceType);
+    return switch (comptime Traits.kind) {
+        .eval => FirstLaneType(EvalReturnType(SourceType, 1, "evalAt")),
+        .read => Traits.output_scalar_type,
+    };
+}
+
 /// Evaluate a source at position (x, y) using checked reads.
+/// This is the vector-native helper. Scalar callers should use readSourceScalarChecked.
 pub inline fn evalSourceChecked(comptime SourceType: type, source: SourceType, comptime vec_len: comptime_int, x: i32, y: i32) EvalReturnType(SourceType, vec_len, "evalAt") {
     const Traits = SourceTraits(SourceType);
     return switch (comptime Traits.kind) {
@@ -189,11 +246,33 @@ pub inline fn evalSourceChecked(comptime SourceType: type, source: SourceType, c
 }
 
 /// Evaluate a source at position (x, y) using unchecked reads (no bounds checking).
+/// This is the vector-native helper. Scalar callers should use readSourceScalarUnchecked.
 pub inline fn evalSourceUnchecked(comptime SourceType: type, source: SourceType, comptime vec_len: comptime_int, x: i32, y: i32) EvalReturnType(SourceType, vec_len, "evalAtUnchecked") {
     const Traits = SourceTraits(SourceType);
     return switch (comptime Traits.unchecked_kind orelse sourceContractError(SourceType, "must implement evalAtUnchecked() or readVecUnchecked() to support unchecked access")) {
         .eval => source.evalAtUnchecked(x, y),
         .read => source.readVecUnchecked(@Vector(vec_len, Traits.output_scalar_type), x, y),
+    };
+}
+
+/// Read a single scalar value from a source using checked access.
+pub inline fn readSourceScalarChecked(comptime SourceType: type, source: SourceType, x: i32, y: i32) SourceScalarValueType(SourceType) {
+    const Traits = SourceTraits(SourceType);
+    return switch (comptime Traits.kind) {
+        .eval => firstLane(source.evalAt(x, y)),
+        .read => if (comptime Traits.has_read_scalar)
+            source.read(x, y)
+        else
+            firstLane(source.readVec(@Vector(1, Traits.output_scalar_type), x, y)),
+    };
+}
+
+/// Read a single scalar value from a source using unchecked access.
+pub inline fn readSourceScalarUnchecked(comptime SourceType: type, source: SourceType, x: i32, y: i32) SourceScalarValueType(SourceType) {
+    const Traits = SourceTraits(SourceType);
+    return switch (comptime Traits.unchecked_kind orelse sourceContractError(SourceType, "must implement evalAtUnchecked() or readVecUnchecked() to support unchecked access")) {
+        .eval => firstLane(source.evalAtUnchecked(x, y)),
+        .read => firstLane(source.readVecUnchecked(@Vector(1, Traits.output_scalar_type), x, y)),
     };
 }
 
@@ -460,4 +539,37 @@ pub fn makeInterleavedDest(
         .width = width,
         .region = region,
     };
+}
+
+test "scalar helpers read checked and unchecked values from read-based sources" {
+    const region: Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
+    var input_data: [8]f32 = .{ 1, 2, 3, 4, 5, 6, 7, 8 };
+    const source = try makeSource(f32, &input_data, region.width, region);
+
+    try std.testing.expectEqual(@as(f32, 1), readSourceScalarChecked(@TypeOf(source), source, -2, 0));
+    try std.testing.expectEqual(@as(f32, 6), readSourceScalarChecked(@TypeOf(source), source, 1, 1));
+    try std.testing.expectEqual(@as(f32, 7), readSourceScalarUnchecked(@TypeOf(source), source, 2, 1));
+}
+
+test "scalar helpers extract lane 0 from eval-based sources" {
+    const EvalSource = struct {
+        fn valueAt(x: i32, y: i32) @Vector(4, f32) {
+            const base = @as(f32, @floatFromInt(x + y * 4));
+            return .{ base, base + 1, base + 2, base + 3 };
+        }
+
+        pub fn evalAt(self: @This(), x: i32, y: i32) @Vector(4, f32) {
+            _ = self;
+            return valueAt(x, y);
+        }
+
+        pub fn evalAtUnchecked(self: @This(), x: i32, y: i32) @Vector(4, f32) {
+            _ = self;
+            return valueAt(x, y);
+        }
+    };
+
+    const source = EvalSource{};
+    try std.testing.expectEqual(@as(f32, 6), readSourceScalarChecked(@TypeOf(source), source, 2, 1));
+    try std.testing.expectEqual(@as(f32, 6), readSourceScalarUnchecked(@TypeOf(source), source, 2, 1));
 }
