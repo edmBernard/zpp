@@ -152,7 +152,8 @@ pub fn generate(
 /// Supports configurable vector length and uses the source's padding policy.
 /// When unchecked=true, skips bounds checking for the interior fast path.
 pub fn InputAccessorGeneric(comptime SourceType: type, comptime VecT: type, comptime unchecked: bool) type {
-    const ReturnType = if (@hasDecl(SourceType, "OutputType")) SourceType.OutputType else VecT;
+    const SourceInfo = sources.SourceTraits(SourceType);
+    const ReturnType = if (SourceInfo.has_output_type) SourceType.OutputType else VecT;
 
     return struct {
         source: SourceType,
@@ -166,22 +167,16 @@ pub fn InputAccessorGeneric(comptime SourceType: type, comptime VecT: type, comp
             const x = self.current_x + dx;
             const y = self.current_y + dy;
 
-            // Check if source is a LoopResult (for expression trees) - has evalAt
-            if (@hasDecl(SourceType, "evalAt")) {
-                if (comptime unchecked and @hasDecl(SourceType, "evalAtUnchecked")) {
-                    return self.source.evalAtUnchecked(x, y);
-                } else {
-                    return self.source.evalAt(x, y);
-                }
-            } else if (@hasDecl(SourceType, "readVec")) {
-                if (comptime unchecked and @hasDecl(SourceType, "readVecUnchecked")) {
-                    return self.source.readVecUnchecked(VecT, x, y);
-                } else {
-                    return self.source.readVec(VecT, x, y);
-                }
-            } else {
-                @compileError("Invalid source type for InputAccessor: missing evalAt or readVec");
-            }
+            return switch (comptime SourceInfo.kind) {
+                .eval => if (comptime unchecked and SourceInfo.unchecked_kind == .eval)
+                    self.source.evalAtUnchecked(x, y)
+                else
+                    self.source.evalAt(x, y),
+                .read => if (comptime unchecked and SourceInfo.unchecked_kind == .read)
+                    self.source.readVecUnchecked(VecT, x, y)
+                else
+                    self.source.readVec(VecT, x, y),
+            };
         }
 
         /// Get current value (no offset) - for identity operations
@@ -213,6 +208,7 @@ pub fn LoopResult(
     comptime process_fn: anytype,
     comptime opts: LoopOptions,
 ) type {
+    const SourceInfo = sources.SourceTraits(SourceType);
     const has_coords = opts.coord_type != null;
     const is_zip_source = isZipSourceType(SourceType);
     const is_group_source = isGroupSourceType(SourceType);
@@ -239,8 +235,7 @@ pub fn LoopResult(
     const ReturnType = ProcessReturnType(process_fn);
 
     // Check if the source chain supports unchecked access
-    const source_has_unchecked = @hasDecl(SourceType, "readVecUnchecked") or
-        @hasDecl(SourceType, "evalAtUnchecked");
+    const source_has_unchecked = SourceInfo.has_unchecked;
 
     return struct {
         source: SourceType,
@@ -310,7 +305,7 @@ pub fn LoopResult(
             // If the source is a chained LoopResult with its own interior region,
             // use that as the base. It already accounts for vec_len and deeper margins.
             // We only need to deflate by our own kernel's margin offsets.
-            if (comptime @hasDecl(SourceType, "getInteriorRegion")) {
+            if (comptime SourceInfo.has_interior_region) {
                 const src_interior = self.source.getInteriorRegion();
                 if (src_interior.width == 0 or src_interior.height == 0) {
                     return .{ .width = 0, .height = 0 };
@@ -346,6 +341,7 @@ pub fn loop(
     comptime process_fn: anytype,
 ) LoopResult(VecT, @TypeOf(source), @TypeOf(context), process_fn, opts) {
     comptime sources.assertIsSource(@TypeOf(source));
+    comptime sources.assertSourceHasRegion(@TypeOf(source));
     return .{
         .source = source,
         .context = context,
@@ -360,7 +356,9 @@ pub fn loop(
 /// Get compatible vector length.
 /// In case of conversion the length must accommodate both source and destination.
 fn getCompatibleVectorLen(comptime SourceType: type, comptime DestType: type) comptime_int {
-    const suggested_source_len = std.simd.suggestVectorLength(SourceType.OutputScalarType) orelse 1;
+    const SourceInfo = sources.SourceTraits(SourceType);
+    comptime sources.assertDestHasInputScalarType(DestType);
+    const suggested_source_len = std.simd.suggestVectorLength(SourceInfo.output_scalar_type) orelse 1;
     const suggested_dest_len = std.simd.suggestVectorLength(DestType.InputScalarType) orelse 1;
     return @max(suggested_source_len, suggested_dest_len);
 }
@@ -380,6 +378,8 @@ const getSourceVecLen = zip.getSourceVecLen;
 pub fn process(source: anytype, dest: anytype) void {
     const SourceType = @TypeOf(source);
     const DestType = @TypeOf(dest);
+    const SourceInfo = sources.SourceTraits(SourceType);
+    const DestInfo = sources.DestTraits(DestType);
     comptime sources.assertIsSource(SourceType);
     comptime sources.assertIsDest(DestType);
 
@@ -390,11 +390,11 @@ pub fn process(source: anytype, dest: anytype) void {
 
     // Check if destination supports idempotent/overlapping writes (e.g., pixel buffers)
     // Accumulators like Stats do not support this and must use scalar remainder handling
-    const supports_overlapping_writes = @hasDecl(DestType, "supports_overlapping_writes") and DestType.supports_overlapping_writes;
+    const supports_overlapping_writes = DestInfo.supports_overlapping_writes;
 
     // Check if source supports split iteration (unchecked interior path)
-    const has_unchecked = @hasDecl(SourceType, "evalAtUnchecked") or @hasDecl(SourceType, "readVecUnchecked");
-    const has_interior = @hasDecl(SourceType, "getInteriorRegion") and has_unchecked;
+    const has_unchecked = SourceInfo.has_unchecked;
+    const has_interior = SourceInfo.has_interior_region and has_unchecked;
 
     if (has_interior) {
         const interior = source.getInteriorRegion();

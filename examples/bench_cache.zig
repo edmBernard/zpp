@@ -46,8 +46,8 @@ pub fn main() !void {
     defer allocator.free(dst_data);
 
     const region = zpp.Region{ .x = 0, .y = 0, .width = width, .height = height };
-    const source = zpp.makeSource(f32, src_data, width, region);
-    const dest = zpp.makeDest(f32, dst_data, width, region);
+    const source = try zpp.makeSource(f32, src_data, width, region);
+    const dest = try zpp.makeDest(f32, dst_data, width, region);
 
     var times_with_cache: [num_iterations]u64 = undefined;
     var times_without_cache: [num_iterations]u64 = undefined;

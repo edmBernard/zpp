@@ -73,8 +73,8 @@ pub fn main() !void {
     const src_region = zpp.Region{ .x = 0, .y = 0, .width = src_w, .height = src_h };
     const dst_region = zpp.Region{ .x = 0, .y = 0, .width = dst_w, .height = dst_h };
 
-    const source = zpp.makeSource(f32, src_data, src_w, src_region);
-    const dest = zpp.makeDest(f32, dst_data, dst_w, dst_region);
+    const source = try zpp.makeSource(f32, src_data, src_w, src_region);
+    const dest = try zpp.makeDest(f32, dst_data, dst_w, dst_region);
 
     runBenchmark(.nearest, "Nearest", source, dst_region, dest, num_iterations);
     runBenchmark(.linear, "Linear ", source, dst_region, dest, num_iterations);

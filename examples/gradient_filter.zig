@@ -255,7 +255,7 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
     const gamma_ctx = GammaContext{ .gamma = 0.6 }; // Brighten the edges
     const corrected = zpp.loop(f32v, .{}, edges, gamma_ctx, gammaKernel);
     // Process the expression tree and write to grayscale buffer
-    const gray_dest = zpp.makeDest(f32, gray_data, width, output_region);
+    const gray_dest = try zpp.makeDest(f32, gray_data, width, output_region);
     zpp.process(corrected, gray_dest);
 
     // Convert grayscale to RGB
@@ -338,8 +338,8 @@ test "gamma kernel with gamma=1.0 is identity" {
     var input: [4]f32 = .{ 0.25, 0.5, 0.75, 1.0 };
     var output: [4]f32 = .{ 0, 0, 0, 0 };
 
-    const source = zpp.makeSource(f32, &input, 4, region);
-    const dest = zpp.makeDest(f32, &output, 4, region);
+    const source = try zpp.makeSource(f32, &input, 4, region);
+    const dest = try zpp.makeDest(f32, &output, 4, region);
 
     const ctx = GammaContext{ .gamma = 1.0 };
     const result = zpp.loop(f32v, .{}, source, ctx, gammaKernel);
@@ -361,8 +361,8 @@ test "gradient kernel detects edges" {
     };
     var output: [12]f32 = .{0} ** 12;
 
-    const source = zpp.makeSource(f32, &input, 4, region);
-    const dest = zpp.makeDest(f32, &output, 4, region);
+    const source = try zpp.makeSource(f32, &input, 4, region);
+    const dest = try zpp.makeDest(f32, &output, 4, region);
 
     const ctx = GradientContext{};
     const result = zpp.loop(f32v, .{ .margin = zpp.Margin.uniform(1) }, source, ctx, gradientKernel);
@@ -380,8 +380,8 @@ test "expression tree chaining works" {
     var input: [4]f32 = .{ 0.1, 0.2, 0.3, 0.4 };
     var output: [4]f32 = .{ 0, 0, 0, 0 };
 
-    const source = zpp.makeSource(f32, &input, 4, region);
-    const dest = zpp.makeDest(f32, &output, 4, region);
+    const source = try zpp.makeSource(f32, &input, 4, region);
+    const dest = try zpp.makeDest(f32, &output, 4, region);
 
     // Chain: identity -> gamma
     const identity_kernel = struct {
@@ -412,8 +412,8 @@ test "resize with interpLoop" {
     var source_data: [4]f32 = .{ 0.0, 1.0, 2.0, 3.0 };
     var output_data: [16]f32 = .{0} ** 16;
 
-    const source = zpp.makeSource(f32, &source_data, 2, source_region);
-    const dest = zpp.makeDest(f32, &output_data, 4, output_region);
+    const source = try zpp.makeSource(f32, &source_data, 2, source_region);
+    const dest = try zpp.makeDest(f32, &output_data, 4, output_region);
 
     const resize_ctx = ResizeContext{ .scale = zpp.math.splat(f32v, 0.5) };
     const resized = zpp.interpLoop(f32v, .linear, source, output_region, resize_ctx, resizeKernel);

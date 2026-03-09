@@ -15,8 +15,8 @@ test "InterpLoop Nearest: identity transform preserves values" {
     th.fillRamp(f32, &input_data, 1, 1);
     var output_data = [_]f32{0} ** 8;
 
-    const source = zpp.makeSource(f32, &input_data, region.width, region);
-    const destination = zpp.makeDest(f32, &output_data, region.width, region);
+    const source = try zpp.makeSource(f32, &input_data, region.width, region);
+    const destination = try zpp.makeDest(f32, &output_data, region.width, region);
 
     // Identity transform kernel - sample at same coordinates
     const interp_kernel = struct {
@@ -45,8 +45,8 @@ test "InterpLoop Nearest: slightly shifted transform preserves values" {
     th.fillRamp(f32, &input_data, 1, 1);
     var output_data = [_]f32{0} ** 8;
 
-    const source = zpp.makeSource(f32, &input_data, region.width, region);
-    const destination = zpp.makeDest(f32, &output_data, region.width, region);
+    const source = try zpp.makeSource(f32, &input_data, region.width, region);
+    const destination = try zpp.makeDest(f32, &output_data, region.width, region);
 
     // Identity transform kernel - sample at same coordinates
     const interp_kernel = struct {
@@ -78,8 +78,8 @@ test "InterpLoop: 2x scale with nearest produces correct duplication" {
 
     var output_data = [_]f32{0} ** 64;
 
-    const source = zpp.makeSource(f32, &input_data, input_region.width, input_region);
-    const destination = zpp.makeDest(f32, &output_data, output_region.width, output_region);
+    const source = try zpp.makeSource(f32, &input_data, input_region.width, input_region);
+    const destination = try zpp.makeDest(f32, &output_data, output_region.width, output_region);
 
     // 2x upscale: output coords * 0.5 = input coords
     const scale_kernel = struct {
@@ -111,7 +111,7 @@ test "InterpLoop Nearest: identity transform with generator source" {
     const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
 
     var output_data = [_]f32{0} ** 8;
-    const destination = zpp.makeDest(f32, &output_data, region.width, region);
+    const destination = try zpp.makeDest(f32, &output_data, region.width, region);
 
     // Generator that produces y * width + x (ramp pattern)
     const gen_kernel = struct {
@@ -154,8 +154,8 @@ test "InterpLoop: 2x scale with linear produces correct value" {
 
     var output_data = [_]f32{0} ** 64;
 
-    const source = zpp.makeSource(f32, &input_data, input_region.width, input_region);
-    const destination = zpp.makeDest(f32, &output_data, output_region.width, output_region);
+    const source = try zpp.makeSource(f32, &input_data, input_region.width, input_region);
+    const destination = try zpp.makeDest(f32, &output_data, output_region.width, output_region);
 
     // 2x upscale: output coords * 0.5 = input coords
     const scale_kernel = struct {

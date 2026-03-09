@@ -20,11 +20,11 @@ test "Source: Naked In source reads correct values" {
         const ScalarType = @typeInfo(DataType).vector.child;
 
         var output_data = [_]ScalarType{0} ** 4;
-        const destination = zpp.makeDest(ScalarType, &output_data, region.width, region);
+        const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);
 
         var source_data = [_]ScalarType{0} ** 4;
         th.fillRamp(ScalarType, &source_data, 1, 3);
-        const source = zpp.makeSource(ScalarType, &source_data, region.width, region);
+        const source = try zpp.makeSource(ScalarType, &source_data, region.width, region);
 
         zpp.process(source, destination);
 
@@ -40,11 +40,11 @@ test "Source: Naked In source reads correct values: larger and odd region" {
         const ScalarType = @typeInfo(DataType).vector.child;
 
         var output_data = [_]ScalarType{0} ** 15;
-        const destination = zpp.makeDest(ScalarType, &output_data, region.width, region);
+        const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);
 
         var source_data = [_]ScalarType{0} ** 15;
         th.fillRamp(ScalarType, &source_data, 1, 3);
-        const source = zpp.makeSource(ScalarType, &source_data, region.width, region);
+        const source = try zpp.makeSource(ScalarType, &source_data, region.width, region);
 
         zpp.process(source, destination);
 
@@ -64,10 +64,10 @@ test "Source: Only fill requested region: Same global size, different regions" {
 
         var source_data = [_]ScalarType{0} ** 45;
         th.fillRamp(ScalarType, &source_data, 1, 1);
-        const source = zpp.makeSource(ScalarType, &source_data, input_region.width, input_region);
+        const source = try zpp.makeSource(ScalarType, &source_data, input_region.width, input_region);
 
         var output_data = [_]ScalarType{0} ** 45;
-        const destination = zpp.makeDest(ScalarType, &output_data, output_stride, output_region);
+        const destination = try zpp.makeDest(ScalarType, &output_data, output_stride, output_region);
 
         zpp.process(source, destination);
 
@@ -98,10 +98,10 @@ test "Source: Only fill requested region: Same global size, different regions, p
 
         var source_data = [_]ScalarType{0} ** (image_width * image_height);
         th.fillRamp(ScalarType, &source_data, 1, 1);
-        const source = zpp.makeSource(ScalarType, &source_data, input_stride, input_region);
+        const source = try zpp.makeSource(ScalarType, &source_data, input_stride, input_region);
 
         var output_data = [_]ScalarType{0} ** (image_width * image_height);
-        const destination = zpp.makeDest(ScalarType, &output_data, output_stride, output_region);
+        const destination = try zpp.makeDest(ScalarType, &output_data, output_stride, output_region);
 
         zpp.process(source, destination);
 
@@ -125,7 +125,7 @@ test "Source: readVec in-bounds loads correct values across types" {
 
         var input_data: [16]ScalarType = undefined;
         th.fillRamp(ScalarType, &input_data, 1, 1);
-        const source = zpp.makeSource(ScalarType, &input_data, region.width, region);
+        const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
 
         // In-bounds read at (0, 0) -> should load [1, 2, 3, 4]
         const vec1 = source.readVec(VecType, 0, 0);
@@ -151,7 +151,7 @@ test "Source: readVec out-of-bounds with RepeatEdgePadding across types" {
         // Input: [[1,2,3,4], [5,6,7,8]]
         var input_data: [8]ScalarType = undefined;
         th.fillRamp(ScalarType, &input_data, 1, 1);
-        const source = zpp.makeSource(ScalarType, &input_data, region.width, region);
+        const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
 
         // Read starting at x=-1 (left edge clamp) -> [1, 1, 2, 3]
         const vec1 = source.readVec(VecType, -1, 0);
@@ -181,7 +181,7 @@ test "Source: readVec out-of-bounds with ZeroPadding across types" {
         // Input: [[1,2,3,4], [5,6,7,8]]
         var input_data: [8]ScalarType = undefined;
         th.fillRamp(ScalarType, &input_data, 1, 1);
-        const source = zpp.makePaddedSource(ScalarType, zpp.ZeroPadding, &input_data, region.width, region);
+        const source = try zpp.makePaddedSource(ScalarType, zpp.ZeroPadding, &input_data, region.width, region);
 
         // Read starting at x=-1 (left edge zero) -> [0, 1, 2, 3]
         const vec1 = source.readVec(VecType, -1, 0);
@@ -199,4 +199,35 @@ test "Source: readVec out-of-bounds with ZeroPadding across types" {
         const vec4 = source.readVec(VecType, 0, 2);
         try std.testing.expectEqual(VecType{ 0, 0, 0, 0 }, vec4);
     }
+}
+
+test "Source constructors reject negative region origins" {
+    const region: zpp.Region = .{ .x = -1, .y = 0, .width = 2, .height = 2 };
+    var data = [_]f32{0} ** 4;
+
+    try std.testing.expectError(error.NegativeRegionOrigin, zpp.makeSource(f32, &data, 2, region));
+    try std.testing.expectError(error.NegativeRegionOrigin, zpp.makeDest(f32, &data, 2, region));
+}
+
+test "Source constructors reject regions wider than the stride" {
+    const region: zpp.Region = .{ .x = 1, .y = 0, .width = 4, .height = 1 };
+    var data = [_]f32{0} ** 8;
+
+    try std.testing.expectError(error.StrideTooSmall, zpp.makeSource(f32, &data, 4, region));
+    try std.testing.expectError(error.StrideTooSmall, zpp.makeDest(f32, &data, 4, region));
+}
+
+test "Source constructors reject buffers that do not cover the requested region" {
+    const region: zpp.Region = .{ .x = 0, .y = 1, .width = 4, .height = 2 };
+    var data = [_]f32{0} ** 7;
+
+    try std.testing.expectError(error.BufferTooSmall, zpp.makeSource(f32, &data, 4, region));
+    try std.testing.expectError(error.BufferTooSmall, zpp.makeDest(f32, &data, 4, region));
+}
+
+test "Interleaved destination constructor validates buffer shape" {
+    const region: zpp.Region = .{ .x = 1, .y = 1, .width = 3, .height = 2 };
+    var data = [_]u8{0} ** 20;
+
+    try std.testing.expectError(error.BufferTooSmall, zpp.makeInterleavedDest(u8, 3, &data, 4, region));
 }

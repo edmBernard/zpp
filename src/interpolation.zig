@@ -25,6 +25,7 @@ pub const InterpolationMethod = enum {
 /// Pixel interpolator that provides interpolated access to an image.
 /// Used within InterpLoop kernels to sample pixels at non-integer coordinates.
 pub fn PixelInterpolator(comptime SourceType: type, comptime VecT: type, comptime method: InterpolationMethod) type {
+    const SourceInfo = sources.SourceTraits(SourceType);
     const vec_len = @typeInfo(VecT).vector.len;
     const ElemT = @typeInfo(VecT).vector.child;
 
@@ -138,7 +139,7 @@ pub fn PixelInterpolator(comptime SourceType: type, comptime VecT: type, comptim
 
         /// Read a single pixel at integer coordinates, with padding
         inline fn readPixel(self: Self, xi: i32, yi: i32) ElemT {
-            return switch (comptime sources.SourceKind(SourceType)) {
+            return switch (comptime SourceInfo.kind) {
                 .eval => self.source.evalAt(xi, yi)[0],
                 .read => self.source.read(xi, yi),
             };

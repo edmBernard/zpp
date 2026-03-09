@@ -19,8 +19,8 @@ test "Cache: All loop result fit in cache" {
 
     var output_data = [_]f32{0} ** 8;
 
-    const source = zpp.makeSource(f32, &input_data, region.width, region);
-    const destination = zpp.makeDest(f32, &output_data, region.width, region);
+    const source = try zpp.makeSource(f32, &input_data, region.width, region);
+    const destination = try zpp.makeDest(f32, &output_data, region.width, region);
 
     const stat_kernel = struct {
         const Context = struct {
@@ -77,8 +77,8 @@ test "Cache: Smaller cache than loop result" {
 
     var output_data = [_]f32{0} ** 8;
 
-    const source = zpp.makeSource(f32, &input_data, region.width, region);
-    const destination = zpp.makeDest(f32, &output_data, region.width, region);
+    const source = try zpp.makeSource(f32, &input_data, region.width, region);
+    const destination = try zpp.makeDest(f32, &output_data, region.width, region);
 
     const stat_kernel = struct {
         const Context = struct {

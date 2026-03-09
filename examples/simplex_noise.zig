@@ -151,7 +151,7 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
         .height = height,
     };
 
-    const destination = zpp.makeInterleavedDest(u8, 3, data, width, region);
+    const destination = try zpp.makeInterleavedDest(u8, 3, data, width, region);
     const generator = zpp.generate(f32v, context, noiseProcess);
     zpp.process(generator, destination);
 

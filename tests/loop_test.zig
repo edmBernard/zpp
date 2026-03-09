@@ -20,10 +20,10 @@ test "Loop: produce correct type accessor" {
         const ScalarType = @typeInfo(LoopType).vector.child;
 
         var input_data: [4]ScalarType = .{ 1.0, 2.0, 3.0, 4.0 };
-        const source = zpp.makeSource(ScalarType, &input_data, region.width, region);
+        const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
 
         var output: [4]ScalarType = .{ 0, 0, 0, 0 };
-        const destination = zpp.makeDest(ScalarType, &output, region.width, region);
+        const destination = try zpp.makeDest(ScalarType, &output, region.width, region);
 
         const processing_kernel = struct {
             fn process(ctx: anytype, in: anytype) LoopType {
@@ -56,10 +56,10 @@ test "Loop: produce correct coordinates and loop type" {
             const ScalarType = @typeInfo(LoopType).vector.child;
 
             var input_data: [4]ScalarType = .{ 1.0, 2.0, 3.0, 4.0 };
-            const source = zpp.makeSource(ScalarType, &input_data, region.width, region);
+            const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
 
             var output: [4]ScalarType = .{ 0, 0, 0, 0 };
-            const destination = zpp.makeDest(ScalarType, &output, region.width, region);
+            const destination = try zpp.makeDest(ScalarType, &output, region.width, region);
 
             const processing_kernel = struct {
                 fn process(ctx: anytype, in: anytype, x: anytype, y: anytype) LoopType {
@@ -102,8 +102,8 @@ test "Loop: expression tree chains two kernels across types" {
         th.fillRamp(ScalarType, &input_data, 1, 1);
         var output_data = [_]ScalarType{0} ** 8;
 
-        const source = zpp.makeSource(ScalarType, &input_data, region.width, region);
-        const destination = zpp.makeDest(ScalarType, &output_data, region.width, region);
+        const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
+        const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);
 
         // First kernel: scale by 2
         const scale_kernel = struct {
@@ -148,8 +148,8 @@ test "Loop: expression tree chains two kernels with margin (V then H)" {
         th.fillRamp(ScalarType, &input_data, 1, 1);
         var output_data = [_]ScalarType{0} ** (width * height);
 
-        const source = zpp.makeSource(ScalarType, &input_data, region.width, region);
-        const destination = zpp.makeDest(ScalarType, &output_data, region.width, region);
+        const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
+        const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);
 
         const vertical_kernel = struct {
             fn process(ctx: anytype, in: anytype) LoopType {
@@ -195,8 +195,8 @@ test "Loop: expression tree chains two kernels with margin (H then V)" {
         th.fillRamp(ScalarType, &input_data, 1, 1);
         var output_data = [_]ScalarType{0} ** (width * height);
 
-        const source = zpp.makeSource(ScalarType, &input_data, region.width, region);
-        const destination = zpp.makeDest(ScalarType, &output_data, region.width, region);
+        const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
+        const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);
 
         const vertical_kernel = struct {
             fn process(ctx: anytype, in: anytype) LoopType {
@@ -242,8 +242,8 @@ test "Loop: non-origin region preserves data" {
         th.fillRamp(ScalarType, &input_data, 1, 1);
         var output_data = [_]ScalarType{0} ** (image_width * image_height);
 
-        const source = zpp.makeSource(ScalarType, &input_data, image_width, region);
-        const destination = zpp.makeDest(ScalarType, &output_data, image_width, region);
+        const source = try zpp.makeSource(ScalarType, &input_data, image_width, region);
+        const destination = try zpp.makeDest(ScalarType, &output_data, image_width, region);
 
         // Identity kernel
         const id_kernel = struct {
@@ -275,8 +275,8 @@ test "Loop: margins with RepeatEdgePadding across types" {
         var input_data: [4]ScalarType = .{ 1.0, 2.0, 3.0, 4.0 };
         var output_data = [_]ScalarType{0} ** 4;
 
-        const source = zpp.makeSource(ScalarType, &input_data, region.width, region);
-        const destination = zpp.makeDest(ScalarType, &output_data, region.width, region);
+        const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
+        const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);
 
         const processing_kernel = struct {
             fn process(ctx: anytype, in: anytype) LoopType {
@@ -311,8 +311,8 @@ test "Loop: margins on wide region triggers split iteration" {
         th.fillRamp(ScalarType, &input_data, 1, 1);
         var output_data = [_]ScalarType{0} ** 36;
 
-        const source = zpp.makeSource(ScalarType, &input_data, region.width, region);
-        const destination = zpp.makeDest(ScalarType, &output_data, region.width, region);
+        const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
+        const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);
 
         const blur_kernel = struct {
             fn process(ctx: anytype, in: anytype) LoopType {
@@ -355,8 +355,8 @@ test "Loop: vertical margins on tall region triggers split iteration" {
     th.fillRamp(f32, &input_data, 1, 1);
     var output_data = [_]f32{0} ** 72;
 
-    const source = zpp.makeSource(f32, &input_data, region.width, region);
-    const destination = zpp.makeDest(f32, &output_data, region.width, region);
+    const source = try zpp.makeSource(f32, &input_data, region.width, region);
+    const destination = try zpp.makeDest(f32, &output_data, region.width, region);
 
     // 2D kernel: sum of cross neighbors (left + right + above + below + center)
     const cross_kernel = struct {
@@ -402,7 +402,7 @@ test "Loop: generator with coordinates at non-origin region" {
             const ScalarType = @typeInfo(OutputType).vector.child;
 
             var output = [_]ScalarType{0} ** (image_width * image_height);
-            const destination = zpp.makeDest(ScalarType, &output, image_width, region);
+            const destination = try zpp.makeDest(ScalarType, &output, image_width, region);
 
             const gen_kernel = struct {
                 fn process(ctx: anytype, x: anytype, y: anytype) OutputType {
@@ -438,8 +438,8 @@ test "Loop: width=1 processes single pixel correctly" {
         var input_data: [1]ScalarType = .{42.0};
         var output_data: [1]ScalarType = .{0};
 
-        const source = zpp.makeSource(ScalarType, &input_data, region.width, region);
-        const destination = zpp.makeDest(ScalarType, &output_data, region.width, region);
+        const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
+        const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);
 
         const double_kernel = struct {
             fn process(ctx: anytype, in: anytype) LoopType {
@@ -463,7 +463,7 @@ test "Loop: Process with Stat call the correct number of time the kernel" {
 
     var input_data: [10]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
-    const source = zpp.makeSource(f32, &input_data, region.width, region);
+    const source = try zpp.makeSource(f32, &input_data, region.width, region);
 
     const id_kernel = struct {
         const Context = struct {};
@@ -513,9 +513,9 @@ test "Loop: Process with Loop call the correct number of time the kernel" {
 
     var input_data: [10]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
-    const source = zpp.makeSource(f32, &input_data, region.width, region);
+    const source = try zpp.makeSource(f32, &input_data, region.width, region);
     var output_data = [_]f32{0} ** (10);
-    const destination = zpp.makeDest(f32, &output_data, region.width, region);
+    const destination = try zpp.makeDest(f32, &output_data, region.width, region);
 
     // Count how many batch and scalar calls we get
     const identity_kernel = struct {
@@ -558,8 +558,8 @@ test "Loop: Process with Loop process pixel two time if trying inplace computati
 
     var input_data: [10]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
-    const source = zpp.makeSource(f32, &input_data, region.width, region);
-    const destination = zpp.makeDest(f32, &input_data, region.width, region);
+    const source = try zpp.makeSource(f32, &input_data, region.width, region);
+    const destination = try zpp.makeDest(f32, &input_data, region.width, region);
 
     // Count how many batch and scalar calls we get
     const identity_kernel = struct {
@@ -592,8 +592,8 @@ test "Loop: width=2 processes sub-vector region correctly" {
         th.fillRamp(ScalarType, &input_data, 1, 1);
         var output_data = [_]ScalarType{0} ** 6;
 
-        const source = zpp.makeSource(ScalarType, &input_data, region.width, region);
-        const destination = zpp.makeDest(ScalarType, &output_data, region.width, region);
+        const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
+        const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);
 
         const triple_kernel = struct {
             fn process(ctx: anytype, in: anytype) LoopType {

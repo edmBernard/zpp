@@ -65,7 +65,7 @@ fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32, square_s
         .height = height,
     };
 
-    const destination = zpp.makeInterleavedDest(u8, 3, data, width, region);
+    const destination = try zpp.makeInterleavedDest(u8, 3, data, width, region);
     const generator = zpp.generate(f32v, context, checkerboardProcess);
     zpp.process(generator, destination);
 

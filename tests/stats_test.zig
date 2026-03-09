@@ -18,7 +18,7 @@ test "Stats destination: remainder handling with non-aligned width" {
 
     var input_data: [5]f32 = .{ 1.0, 2.0, 3.0, 4.0, 5.0 };
 
-    const source = zpp.makeSource(f32, &input_data, region.width, region);
+    const source = try zpp.makeSource(f32, &input_data, region.width, region);
 
     const id_kernel = struct {
         const Context = struct {};
@@ -62,7 +62,7 @@ test "Stats destination: sum accumulation with aligned width" {
 
     var input_data: [8]f32 = .{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0 };
 
-    const source = zpp.makeSource(f32, &input_data, region.width, region);
+    const source = try zpp.makeSource(f32, &input_data, region.width, region);
 
     const id_kernel = struct {
         const Context = struct {};
@@ -102,7 +102,7 @@ test "Stats destination: min/max tracking" {
     // Place min and max at specific known positions
     var input_data: [8]f32 = .{ 5.0, 2.0, 8.0, 1.0, 3.0, 7.0, 0.5, 6.0 };
 
-    const source = zpp.makeSource(f32, &input_data, region.width, region);
+    const source = try zpp.makeSource(f32, &input_data, region.width, region);
 
     const id_kernel = struct {
         const Context = struct {};
@@ -143,7 +143,7 @@ test "Stats destination: compute on the given region" {
     var input_data = [_]f32{0} ** (image_width * image_height);
     th.fillRamp(f32, &input_data, 1, 1);
 
-    const source = zpp.makeSource(f32, &input_data, region_in.width, region_in);
+    const source = try zpp.makeSource(f32, &input_data, region_in.width, region_in);
 
     const id_kernel = struct {
         const Context = struct {};
@@ -185,7 +185,7 @@ test "Stats destination: compute stat directly from source" {
     var input_data = [_]f32{0} ** (image_width * image_height);
     th.fillRamp(f32, &input_data, 1, 1);
 
-    const source = zpp.makeSource(f32, &input_data, region_in.width, region_in);
+    const source = try zpp.makeSource(f32, &input_data, region_in.width, region_in);
 
     const stat_kernel = struct {
         const Context = struct {

@@ -81,7 +81,7 @@ pub fn main() !void {
     const region = zpp.Region{ .x = 0, .y = 0, .width = width, .height = height };
 
     // Create RGB interleaved output destination (3 channels)
-    const dest = zpp.makeInterleavedDest(u8, 3, data, width, region);
+    const dest = try zpp.makeInterleavedDest(u8, 3, data, width, region);
 
     // Define kernel context and process function
     const GradientKernel = struct {
@@ -146,20 +146,20 @@ const v_margin = zpp.Margin.vertical(1);   // 1 pixel vertically only
 
 ```zig
 // Basic input (uses edge-repeat padding by default)
-const source = zpp.makeSource(f32, &input_data, stride, region);
+const source = try zpp.makeSource(f32, &input_data, stride, region);
 
 // Input with explicit zero padding
-const source_zero = zpp.makePaddedSource(f32, zpp.ZeroPadding, &input_data, stride, region);
+const source_zero = try zpp.makePaddedSource(f32, zpp.ZeroPadding, &input_data, stride, region);
 ```
 
 **Output destinations** write processed results:
 
 ```zig
 // Single-channel output
-const dest = zpp.makeDest(f32, &output_data, stride, region);
+const dest = try zpp.makeDest(f32, &output_data, stride, region);
 
 // RGB interleaved output (3 channels, automatically converts float [0,1] to u8 [0,255])
-const rgb_dest = zpp.makeInterleavedDest(u8, 3, &rgb_data, width, region);
+const rgb_dest = try zpp.makeInterleavedDest(u8, 3, &rgb_data, width, region);
 ```
 
 ### Kernels

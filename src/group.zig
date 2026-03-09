@@ -18,10 +18,13 @@ fn getSourceVecLen(comptime SourceType: type) comptime_int {
 /// A grouped source that combines PxQ pixels from a nested source into a single "pixel".
 /// This is useful for Bayer pattern processing where you want to treat 2x2 blocks as units.
 pub fn GroupSource(comptime NestedSource: type, comptime P: comptime_int, comptime Q: comptime_int) type {
+    const NestedInfo = sources.SourceTraits(NestedSource);
     // Derive vector length from nested source
     const vec_len = getSourceVecLen(NestedSource);
     const VecT = @Vector(vec_len, f32);
     const ResultTuple = VecTuple(P * Q, VecT);
+    const ElemT = @typeInfo(VecT).vector.child;
+    const WideVecT = @Vector(P * vec_len, ElemT);
 
     return struct {
         nested: NestedSource,
@@ -50,22 +53,20 @@ pub fn GroupSource(comptime NestedSource: type, comptime P: comptime_int, compti
             const nested_x = x * P;
             const nested_y = y * Q;
 
-            inline for (0..Q) |dy| {
-                inline for (0..P) |dx| {
-                    const idx = dy * P + dx;
-                    if (@hasDecl(NestedSource, "evalAt")) {
+            switch (comptime NestedInfo.kind) {
+                .eval => inline for (0..Q) |dy| {
+                    inline for (0..P) |dx| {
+                        const idx = dy * P + dx;
                         result[idx] = self.nested.evalAt(nested_x + @as(i32, @intCast(dx)), nested_y + @as(i32, @intCast(dy)));
-                    } else if (@hasDecl(NestedSource, "read")) {
-                        var vec: VecT = @splat(0);
-                        inline for (0..vec_len) |i| {
-                            vec[i] = self.nested.read(
-                                nested_x + @as(i32, @intCast(dx)) + @as(i32, @intCast(i * P)),
-                                nested_y + @as(i32, @intCast(dy)),
-                            );
-                        }
-                        result[idx] = vec;
                     }
-                }
+                },
+                .read => inline for (0..Q) |dy| {
+                    const row_data = self.nested.readVec(WideVecT, nested_x, nested_y + @as(i32, @intCast(dy)));
+                    const deinterlaced = std.simd.deinterlace(P, row_data);
+                    inline for (0..P) |dx| {
+                        result[dy * P + dx] = deinterlaced[dx];
+                    }
+                },
             }
 
             return result;
@@ -76,6 +77,11 @@ pub fn GroupSource(comptime NestedSource: type, comptime P: comptime_int, compti
 /// Group a source expression, treating PxQ blocks as single pixels.
 /// The output region is downscaled by P horizontally and Q vertically.
 pub fn group(comptime P: comptime_int, comptime Q: comptime_int, source: anytype) GroupSource(@TypeOf(source), P, Q) {
+    comptime if (P <= 0 or Q <= 0) {
+        @compileError("Group dimensions must be positive");
+    };
+    comptime sources.assertIsSource(@TypeOf(source));
+    comptime sources.assertSourceHasRegion(@TypeOf(source));
     const nested_region = source.region;
 
     // The grouped region is downscaled
@@ -128,6 +134,11 @@ pub fn UngroupSource(comptime GroupedSource: type, comptime P: comptime_int, com
 /// Ungroup a grouped source expression back to individual pixels.
 /// The output region is upscaled by P horizontally and Q vertically.
 pub fn ungroup(comptime P: comptime_int, comptime Q: comptime_int, source: anytype) UngroupSource(@TypeOf(source), P, Q) {
+    comptime if (P <= 0 or Q <= 0) {
+        @compileError("Ungroup dimensions must be positive");
+    };
+    comptime sources.assertIsSource(@TypeOf(source));
+    comptime sources.assertSourceHasRegion(@TypeOf(source));
     const grouped_region = source.region;
 
     // The ungrouped region is upscaled
@@ -146,9 +157,12 @@ pub fn ungroup(comptime P: comptime_int, comptime Q: comptime_int, source: anyty
 /// A grouped destination that writes PxQ pixel blocks to a nested destination.
 /// This is the destination counterpart to GroupSource.
 pub fn GroupDest(comptime NestedDest: type, comptime P: comptime_int, comptime Q: comptime_int) type {
+    const NestedDestInfo = sources.DestTraits(NestedDest);
     return struct {
         nested: NestedDest,
         region: Region,
+
+        pub const InputScalarType = if (NestedDestInfo.has_input_scalar_type) NestedDest.InputScalarType else void;
 
         /// The group dimensions
         pub const group_width = P;
@@ -156,7 +170,7 @@ pub fn GroupDest(comptime NestedDest: type, comptime P: comptime_int, comptime Q
         pub const count = P * Q;
 
         /// Writes are idempotent if the nested destination supports overlapping writes.
-        pub const supports_overlapping_writes = @hasDecl(NestedDest, "supports_overlapping_writes") and NestedDest.supports_overlapping_writes;
+        pub const supports_overlapping_writes = NestedDestInfo.supports_overlapping_writes;
 
         const Self = @This();
 
@@ -202,6 +216,10 @@ pub fn GroupDest(comptime NestedDest: type, comptime P: comptime_int, comptime Q
 /// Group a destination expression, treating PxQ blocks as single output pixels.
 /// The input region is downscaled by P horizontally and Q vertically.
 pub fn groupDest(comptime P: comptime_int, comptime Q: comptime_int, dest: anytype) GroupDest(@TypeOf(dest), P, Q) {
+    comptime if (P <= 0 or Q <= 0) {
+        @compileError("Group destination dimensions must be positive");
+    };
+    comptime sources.assertIsDest(@TypeOf(dest));
     const nested_region = dest.region;
 
     // The grouped region is downscaled
@@ -220,6 +238,8 @@ pub fn groupDest(comptime P: comptime_int, comptime Q: comptime_int, dest: anyty
 /// Accessor for grouped pixels in kernel functions.
 /// Provides access to PxQ pixel groups as tuples.
 pub fn GroupAccessor(comptime SrcType: type, comptime VecT: type, comptime P: comptime_int, comptime Q: comptime_int) type {
+    const NestedType = @TypeOf(@as(SrcType, undefined).nested);
+    const NestedInfo = sources.SourceTraits(NestedType);
     const ResultTuple = VecTuple(P * Q, VecT);
     const vec_len = @typeInfo(VecT).vector.len;
     const ElemT = @typeInfo(VecT).vector.child;
@@ -249,30 +269,21 @@ pub fn GroupAccessor(comptime SrcType: type, comptime VecT: type, comptime P: co
             const nested_x = x * P;
             const nested_y = y * Q;
 
-            // Get access to the nested source (inside GroupSource)
             const nested = self.source.nested;
-            const NestedType = @TypeOf(nested);
-
-            if (@hasDecl(NestedType, "evalAt")) {
-                // Expression tree source - must evaluate each position
-                inline for (0..Q) |qy| {
+            switch (comptime NestedInfo.kind) {
+                .eval => inline for (0..Q) |qy| {
                     inline for (0..P) |px| {
                         const idx = qy * P + px;
                         result[idx] = nested.evalAt(nested_x + @as(i32, @intCast(px)), nested_y + @as(i32, @intCast(qy)));
                     }
-                }
-            } else if (@hasDecl(NestedType, "readVec")) {
-                // InputSource - use deinterlace for efficient SIMD loads
-                // Read P*vec_len contiguous pixels per row, then deinterlace into P vectors
-                inline for (0..Q) |qy| {
+                },
+                .read => inline for (0..Q) |qy| {
                     const row_data = nested.readVec(WideVecT, nested_x, nested_y + @as(i32, @intCast(qy)));
                     const deinterlaced = std.simd.deinterlace(P, row_data);
                     inline for (0..P) |px| {
                         result[qy * P + px] = deinterlaced[px];
                     }
-                }
-            } else {
-                @compileError("Nested source must have evalAt or readVec method");
+                },
             }
 
             return result;

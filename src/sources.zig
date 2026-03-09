@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const Region = @import("region.zig").Region;
+const Margin = @import("region.zig").Margin;
 const padding = @import("padding.zig");
 
 pub const RepeatEdgePadding = padding.RepeatEdgePadding;
@@ -39,22 +40,93 @@ pub fn hasDestTag(comptime T: type, comptime tag: DestTag) bool {
 }
 
 // ============================================================================
-// MARK: Source Kind
+// MARK: Traits
 // ============================================================================
 
-/// Discriminates the kind of source interface a type implements.
-/// Use with `switch` for clean comptime dispatch instead of chained @hasDecl checks.
-pub fn SourceKind(comptime T: type) enum { eval, read } {
-    if (@hasDecl(T, "evalAt")) return .eval;
-    if (@hasDecl(T, "readVec")) return .read;
-    @compileError(@typeName(T) ++ " does not satisfy the Source interface: must implement evalAt() or readVec()");
+pub const SourceAccessKind = enum {
+    eval,
+    read,
+};
+
+fn sourceContractError(comptime T: type, comptime detail: []const u8) noreturn {
+    @compileError(@typeName(T) ++ " does not satisfy the Source interface: " ++ detail);
+}
+
+fn destContractError(comptime T: type, comptime detail: []const u8) noreturn {
+    @compileError(@typeName(T) ++ " does not satisfy the Destination interface: " ++ detail);
+}
+
+/// Centralized comptime traits for source types.
+pub fn SourceTraits(comptime T: type) type {
+    const source_has_eval = @hasDecl(T, "evalAt");
+    const source_has_read_vec = @hasDecl(T, "readVec");
+    const source_kind: SourceAccessKind = if (source_has_eval)
+        .eval
+    else if (source_has_read_vec)
+        .read
+    else
+        sourceContractError(T, "must implement evalAt() or readVec()");
+
+    const source_has_output_scalar_type = @hasDecl(T, "OutputScalarType");
+    if (source_kind == .read and !source_has_output_scalar_type) {
+        sourceContractError(T, "readVec()-based sources must declare OutputScalarType");
+    }
+
+    const source_unchecked_kind: ?SourceAccessKind = if (@hasDecl(T, "evalAtUnchecked"))
+        .eval
+    else if (@hasDecl(T, "readVecUnchecked"))
+        .read
+    else
+        null;
+
+    return struct {
+        pub const kind = source_kind;
+        pub const unchecked_kind = source_unchecked_kind;
+        pub const has_unchecked = source_unchecked_kind != null;
+        pub const has_eval = source_has_eval;
+        pub const has_read_vec = source_has_read_vec;
+        pub const has_read_scalar = @hasDecl(T, "read");
+        pub const has_region = @hasField(T, "region");
+        pub const has_output_type = @hasDecl(T, "OutputType");
+        pub const has_output_scalar_type = source_has_output_scalar_type;
+        pub const has_vector_length = @hasDecl(T, "vector_length");
+        pub const has_margin = @hasDecl(T, "margin");
+        pub const has_interior_region = @hasDecl(T, "getInteriorRegion");
+        pub const output_scalar_type = if (source_has_output_scalar_type) T.OutputScalarType else void;
+        pub const output_type = if (@hasDecl(T, "OutputType")) T.OutputType else void;
+    };
+}
+
+/// Centralized comptime traits for destination types.
+pub fn DestTraits(comptime T: type) type {
+    const dest_has_write = @hasDecl(T, "write");
+    if (!dest_has_write) {
+        destContractError(T, "must implement write()");
+    }
+
+    const dest_has_write_scalar = @hasDecl(T, "writeScalar");
+    if (!dest_has_write_scalar) {
+        destContractError(T, "must implement writeScalar()");
+    }
+
+    const dest_has_region = @hasField(T, "region");
+    if (!dest_has_region) {
+        destContractError(T, "must have a region field");
+    }
+
+    return struct {
+        pub const has_write = dest_has_write;
+        pub const has_write_scalar = dest_has_write_scalar;
+        pub const has_region = dest_has_region;
+        pub const has_input_scalar_type = @hasDecl(T, "InputScalarType");
+        pub const supports_overlapping_writes = @hasDecl(T, "supports_overlapping_writes") and T.supports_overlapping_writes;
+    };
 }
 
 /// Discriminates checked vs unchecked evaluation capability.
-pub fn UncheckedSourceKind(comptime T: type) enum { eval, read } {
-    if (@hasDecl(T, "evalAtUnchecked")) return .eval;
-    if (@hasDecl(T, "readVecUnchecked")) return .read;
-    @compileError(@typeName(T) ++ " does not support unchecked access: must implement evalAtUnchecked() or readVecUnchecked()");
+pub fn UncheckedSourceKind(comptime T: type) SourceAccessKind {
+    return SourceTraits(T).unchecked_kind orelse
+        sourceContractError(T, "must implement evalAtUnchecked() or readVecUnchecked() to support unchecked access");
 }
 
 // ============================================================================
@@ -64,21 +136,26 @@ pub fn UncheckedSourceKind(comptime T: type) enum { eval, read } {
 /// Validate that a type satisfies the Source interface.
 /// A Source must provide either `evalAt` or `readVec` for reading data.
 pub fn assertIsSource(comptime T: type) void {
-    _ = SourceKind(T);
+    _ = SourceTraits(T);
+}
+
+/// Validate that a source is region-addressable.
+pub fn assertSourceHasRegion(comptime T: type) void {
+    if (!SourceTraits(T).has_region) {
+        sourceContractError(T, "must have a region field for this operation");
+    }
 }
 
 /// Validate that a type satisfies the Destination interface.
-/// A Destination must provide `write` and `writeScalar` methods,
-/// an `InputScalarType` declaration, and a `region` field.
+/// A Destination must provide `write` and `writeScalar` methods and a `region` field.
 pub fn assertIsDest(comptime T: type) void {
-    if (!@hasDecl(T, "write")) {
-        @compileError(@typeName(T) ++ " does not satisfy the Destination interface: must implement write()");
-    }
-    if (!@hasDecl(T, "writeScalar")) {
-        @compileError(@typeName(T) ++ " does not satisfy the Destination interface: must implement writeScalar()");
-    }
-    if (!@hasField(T, "region")) {
-        @compileError(@typeName(T) ++ " does not satisfy the Destination interface: must have a region field");
+    _ = DestTraits(T);
+}
+
+/// Validate that a destination exposes an input scalar type.
+pub fn assertDestHasInputScalarType(comptime T: type) void {
+    if (!DestTraits(T).has_input_scalar_type) {
+        destContractError(T, "must declare InputScalarType for vector-length inference");
     }
 }
 
@@ -88,28 +165,59 @@ pub fn assertIsDest(comptime T: type) void {
 
 /// Return type for evalSourceChecked/evalSourceUnchecked.
 fn EvalReturnType(comptime SourceType: type, comptime vec_len: comptime_int, comptime decl_name: []const u8) type {
+    const Traits = SourceTraits(SourceType);
     if (@hasDecl(SourceType, decl_name)) {
         const fn_info = @typeInfo(@TypeOf(@field(SourceType, decl_name)));
         return fn_info.@"fn".return_type.?;
     } else {
-        return @Vector(vec_len, SourceType.OutputScalarType);
+        return @Vector(vec_len, Traits.output_scalar_type);
     }
 }
 
 /// Evaluate a source at position (x, y) using checked reads.
 pub inline fn evalSourceChecked(comptime SourceType: type, source: SourceType, comptime vec_len: comptime_int, x: i32, y: i32) EvalReturnType(SourceType, vec_len, "evalAt") {
-    return switch (comptime SourceKind(SourceType)) {
+    const Traits = SourceTraits(SourceType);
+    return switch (comptime Traits.kind) {
         .eval => source.evalAt(x, y),
-        .read => source.readVec(@Vector(vec_len, SourceType.OutputScalarType), x, y),
+        .read => source.readVec(@Vector(vec_len, Traits.output_scalar_type), x, y),
     };
 }
 
 /// Evaluate a source at position (x, y) using unchecked reads (no bounds checking).
 pub inline fn evalSourceUnchecked(comptime SourceType: type, source: SourceType, comptime vec_len: comptime_int, x: i32, y: i32) EvalReturnType(SourceType, vec_len, "evalAtUnchecked") {
-    return switch (comptime UncheckedSourceKind(SourceType)) {
+    const Traits = SourceTraits(SourceType);
+    return switch (comptime Traits.unchecked_kind orelse sourceContractError(SourceType, "must implement evalAtUnchecked() or readVecUnchecked() to support unchecked access")) {
         .eval => source.evalAtUnchecked(x, y),
-        .read => source.readVecUnchecked(@Vector(vec_len, SourceType.OutputScalarType), x, y),
+        .read => source.readVecUnchecked(@Vector(vec_len, Traits.output_scalar_type), x, y),
     };
+}
+
+fn validatePackedLayout(data_len: usize, stride: u32, region: Region) !void {
+    if (region.area() == 0) return;
+    if (region.x < 0 or region.y < 0) return error.NegativeRegionOrigin;
+
+    const stop_x = @as(u64, @intCast(region.x)) + region.width;
+    if (stop_x > stride) return error.StrideTooSmall;
+
+    const stop_y = @as(u64, @intCast(region.y)) + region.height;
+    const required_len = (stop_y - 1) * @as(u64, stride) + stop_x;
+    if (required_len > data_len) return error.BufferTooSmall;
+}
+
+fn validateInterleavedLayout(comptime num_channels: comptime_int, data_len: usize, width: u32, region: Region) !void {
+    if (num_channels <= 0) {
+        @compileError("Interleaved destinations must use at least one channel");
+    }
+    if (region.area() == 0) return;
+    if (region.x < 0 or region.y < 0) return error.NegativeRegionOrigin;
+
+    const stop_x = @as(u64, @intCast(region.x)) + region.width;
+    if (stop_x > width) return error.StrideTooSmall;
+
+    const stop_y = @as(u64, @intCast(region.y)) + region.height;
+    const pixels_needed = (stop_y - 1) * @as(u64, width) + stop_x;
+    const required_len = pixels_needed * @as(u64, @intCast(num_channels));
+    if (required_len > data_len) return error.BufferTooSmall;
 }
 
 // ============================================================================
@@ -201,7 +309,8 @@ pub fn InputSource(comptime T: type, comptime PaddingPolicy: type) type {
 }
 
 /// Create an input source from data buffer with default RepeatEdgePadding
-pub fn makeSource(comptime T: type, data: []const T, stride: u32, region: Region) InputSource(T, RepeatEdgePadding) {
+pub fn makeSource(comptime T: type, data: []const T, stride: u32, region: Region) !InputSource(T, RepeatEdgePadding) {
+    try validatePackedLayout(data.len, stride, region);
     return .{
         .data = data,
         .stride = stride,
@@ -216,7 +325,8 @@ pub fn makePaddedSource(
     data: []const T,
     stride: u32,
     region: Region,
-) InputSource(T, PaddingPolicy) {
+) !InputSource(T, PaddingPolicy) {
+    try validatePackedLayout(data.len, stride, region);
     return .{
         .data = data,
         .stride = stride,
@@ -263,7 +373,8 @@ pub fn OutputDest(comptime T: type) type {
 }
 
 /// Create an output destination from data buffer
-pub fn makeDest(comptime T: type, data: []T, stride: u32, region: Region) OutputDest(T) {
+pub fn makeDest(comptime T: type, data: []T, stride: u32, region: Region) !OutputDest(T) {
+    try validatePackedLayout(data.len, stride, region);
     return .{
         .data = data,
         .stride = stride,
@@ -337,7 +448,8 @@ pub fn makeInterleavedDest(
     data: []T,
     width: u32,
     region: Region,
-) InterleavedOutput(T, num_channels) {
+) !InterleavedOutput(T, num_channels) {
+    try validateInterleavedLayout(num_channels, data.len, width, region);
     return .{
         .data = data,
         .width = width,

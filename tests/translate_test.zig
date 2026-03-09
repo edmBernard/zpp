@@ -19,11 +19,11 @@ test "Translate: identity shift copies data unchanged" {
 
         var source_data: [8]ScalarType = undefined;
         th.fillRamp(ScalarType, &source_data, 1, 1);
-        const source = zpp.makeSource(ScalarType, &source_data, region.width, region);
+        const source = try zpp.makeSource(ScalarType, &source_data, region.width, region);
         const translated = zpp.translate(source, 0, 0);
 
         var output_data = [_]ScalarType{0} ** 8;
-        const dest = zpp.makeDest(ScalarType, &output_data, region.width, region);
+        const dest = try zpp.makeDest(ScalarType, &output_data, region.width, region);
 
         zpp.process(translated, dest);
 
@@ -40,12 +40,12 @@ test "Translate: shifts data to new position" {
 
         var source_data: [8]ScalarType = undefined;
         th.fillRamp(ScalarType, &source_data, 1, 1);
-        const source = zpp.makeSource(ScalarType, &source_data, src_region.width, src_region);
+        const source = try zpp.makeSource(ScalarType, &source_data, src_region.width, src_region);
         const translated = zpp.translate(source, 2, 1);
 
         const out_region: zpp.Region = .{ .x = 0, .y = 0, .width = 6, .height = 3 };
         var output_data = [_]ScalarType{0} ** (out_region.area());
-        const dest = zpp.makeDest(ScalarType, &output_data, out_region.width, out_region);
+        const dest = try zpp.makeDest(ScalarType, &output_data, out_region.width, out_region);
 
         zpp.process(translated, dest);
 
@@ -67,7 +67,7 @@ test "Translate: through Loop with identity kernel" {
 
         var source_data: [8]ScalarType = undefined;
         th.fillRamp(ScalarType, &source_data, 1, 1);
-        const source = zpp.makeSource(ScalarType, &source_data, src_region.width, src_region);
+        const source = try zpp.makeSource(ScalarType, &source_data, src_region.width, src_region);
         const translated = zpp.translate(source, 2, 1);
 
         const identity_kernel = struct {
@@ -81,7 +81,7 @@ test "Translate: through Loop with identity kernel" {
 
         const out_region: zpp.Region = .{ .x = 0, .y = 0, .width = 6, .height = 3 };
         var output_data = [_]ScalarType{0} ** (out_region.area());
-        const dest = zpp.makeDest(ScalarType, &output_data, out_region.width, out_region);
+        const dest = try zpp.makeDest(ScalarType, &output_data, out_region.width, out_region);
 
         zpp.process(result, dest);
 
@@ -104,7 +104,7 @@ test "Translate: of LoopResult shifts computation" {
 
         var source_data: [8]ScalarType = undefined;
         th.fillRamp(ScalarType, &source_data, 1, 1);
-        const source = zpp.makeSource(ScalarType, &source_data, src_region.width, src_region);
+        const source = try zpp.makeSource(ScalarType, &source_data, src_region.width, src_region);
         const double_kernel = struct {
             fn process(ctx: anytype, in: anytype) VecType {
                 _ = ctx;
@@ -118,7 +118,7 @@ test "Translate: of LoopResult shifts computation" {
         const out_region: zpp.Region = .{ .x = 0, .y = 0, .width = 6, .height = 3 };
         const out_stride = 6;
         var output_data = [_]ScalarType{0} ** (out_stride * 3);
-        const dest = zpp.makeDest(ScalarType, &output_data, out_stride, out_region);
+        const dest = try zpp.makeDest(ScalarType, &output_data, out_stride, out_region);
 
         zpp.process(translated, dest);
 
@@ -140,8 +140,8 @@ test "Translate: with Zip combines shifted sources" {
     var input_b: [8]f32 = undefined;
     th.fillRamp(f32, &input_b, 10, 10);
 
-    const source_a = zpp.makeSource(f32, &input_a, src_region.width, src_region);
-    const source_b = zpp.makeSource(f32, &input_b, src_region.width, src_region);
+    const source_a = try zpp.makeSource(f32, &input_a, src_region.width, src_region);
+    const source_b = try zpp.makeSource(f32, &input_b, src_region.width, src_region);
 
     const translated_b = zpp.translate(source_b, 4, 0);
 
@@ -159,7 +159,7 @@ test "Translate: with Zip combines shifted sources" {
 
     const out_region: zpp.Region = .{ .x = 4, .y = 0, .width = 4, .height = 1 };
     var output_data = [_]f32{0} ** 8;
-    const dest = zpp.makeDest(f32, &output_data, 8, out_region);
+    const dest = try zpp.makeDest(f32, &output_data, 8, out_region);
 
     zpp.process(result, dest);
 
@@ -174,7 +174,7 @@ test "Translate: preserves padding at shifted boundaries" {
     const src_region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 1 };
 
     var source_data: [4]f32 = .{ 10, 20, 30, 40 };
-    const source = zpp.makePaddedSource(f32, zpp.ZeroPadding, &source_data, src_region.width, src_region);
+    const source = try zpp.makePaddedSource(f32, zpp.ZeroPadding, &source_data, src_region.width, src_region);
 
     const translated = zpp.translate(source, 2, 0);
 
@@ -189,7 +189,7 @@ test "Translate: preserves padding at shifted boundaries" {
 
     const out_region: zpp.Region = .{ .x = 0, .y = 0, .width = 8, .height = 1 };
     var output_data = [_]f32{0} ** 8;
-    const dest = zpp.makeDest(f32, &output_data, out_region.width, out_region);
+    const dest = try zpp.makeDest(f32, &output_data, out_region.width, out_region);
 
     zpp.process(result, dest);
 
@@ -208,14 +208,14 @@ test "Translate: negative shift" {
         var source_data = [_]ScalarType{0} ** (stride * 5);
         th.fillRamp(ScalarType, &source_data, 1, 1);
 
-        const source = zpp.makeSource(ScalarType, &source_data, stride, src_region);
+        const source = try zpp.makeSource(ScalarType, &source_data, stride, src_region);
 
         // Translate by (-2, -1) → region becomes (2, 2, 4, 2)
         const translated = zpp.translate(source, -2, -1);
 
         const out_region: zpp.Region = .{ .x = 0, .y = 0, .width = 6, .height = 4 };
         var output_data = [_]ScalarType{0} ** (out_region.area());
-        const dest = zpp.makeDest(ScalarType, &output_data, out_region.width, out_region);
+        const dest = try zpp.makeDest(ScalarType, &output_data, out_region.width, out_region);
 
         zpp.process(translated, dest);
 
@@ -233,8 +233,8 @@ test "Translate: negative shift" {
 test "Translate: region is correctly shifted" {
     const src_region: zpp.Region = .{ .x = 5, .y = 10, .width = 20, .height = 15 };
 
-    var source_data: [1]f32 = .{0};
-    const source = zpp.makeSource(f32, &source_data, 1, src_region);
+    var source_data = [_]f32{0} ** 625;
+    const source = try zpp.makeSource(f32, &source_data, 25, src_region);
 
     const translated = zpp.translate(source, 3, -7);
     const region = translated.region;

@@ -21,7 +21,7 @@ const Margin = @import("region.zig").Margin;
 /// InputSource-like sources (with readVec) get DataTranslatedSource.
 /// LoopResult-like sources (with evalAt) get EvalTranslatedSource.
 fn TranslatedSource(comptime SourceType: type) type {
-    return switch (comptime sources.SourceKind(SourceType)) {
+    return switch (comptime sources.SourceTraits(SourceType).kind) {
         .eval => EvalTranslatedSource(SourceType),
         .read => DataTranslatedSource(SourceType),
     };
@@ -56,8 +56,7 @@ fn DataTranslatedSource(comptime SourceType: type) type {
 /// Translated wrapper for LoopResult-like sources (evalAt-based).
 /// Forwards all evaluations to the underlying source at (x - dx, y - dy).
 fn EvalTranslatedSource(comptime SourceType: type) type {
-    const source_has_unchecked = @hasDecl(SourceType, "evalAtUnchecked");
-    const source_has_interior = @hasDecl(SourceType, "getInteriorRegion");
+    const SourceInfo = sources.SourceTraits(SourceType);
 
     return struct {
         source: SourceType,
@@ -67,7 +66,7 @@ fn EvalTranslatedSource(comptime SourceType: type) type {
 
         pub const OutputType = SourceType.OutputType;
         pub const vector_length = SourceType.vector_length;
-        pub const margin = if (@hasDecl(SourceType, "margin")) SourceType.margin else Margin{};
+        pub const margin = if (SourceInfo.has_margin) SourceType.margin else Margin{};
         const Self = @This();
 
         pub inline fn evalAt(self: Self, x: i32, y: i32) OutputType {
@@ -75,14 +74,14 @@ fn EvalTranslatedSource(comptime SourceType: type) type {
         }
 
         pub inline fn evalAtUnchecked(self: Self, x: i32, y: i32) OutputType {
-            if (comptime source_has_unchecked) {
+            if (comptime SourceInfo.unchecked_kind == .eval) {
                 return self.source.evalAtUnchecked(x - self.dx, y - self.dy);
             }
             return self.source.evalAt(x - self.dx, y - self.dy);
         }
 
         pub fn getInteriorRegion(self: Self) Region {
-            if (comptime source_has_interior) {
+            if (comptime SourceInfo.has_interior_region) {
                 return self.source.getInteriorRegion().shifted(self.dx, self.dy);
             }
             return .{ .width = 0, .height = 0 };
@@ -117,6 +116,7 @@ fn EvalTranslatedSource(comptime SourceType: type) type {
 /// ```
 pub fn translate(source: anytype, dx: i32, dy: i32) TranslatedSource(@TypeOf(source)) {
     comptime sources.assertIsSource(@TypeOf(source));
+    comptime sources.assertSourceHasRegion(@TypeOf(source));
     return .{
         .source = source,
         .dx = dx,
