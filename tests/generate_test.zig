@@ -5,13 +5,16 @@ const th = @import("test_helpers.zig");
 const f32x4 = @Vector(4, f32);
 const u16x4 = @Vector(4, u16);
 const u8x4 = @Vector(4, u8);
+const i16x4 = @Vector(4, i16);
+const i32x4 = @Vector(4, i32);
 
 const AllTypes = [_]type{ f32x4, u16x4, u8x4 };
+const CoordTypes = [_]type{ f32x4, u16x4, u8x4, i16x4, i32x4 };
 
 test "Generator: produce correct coordinates type: smaller region than batch size" {
     const region: zpp.Region = .{ .x = 0, .y = 0, .width = 2, .height = 2 };
 
-    inline for (AllTypes) |CoordType| {
+    inline for (CoordTypes) |CoordVecT| {
         inline for (AllTypes) |OutputType| {
             const ScalarType = @typeInfo(OutputType).vector.child;
 
@@ -22,14 +25,14 @@ test "Generator: produce correct coordinates type: smaller region than batch siz
                 fn process(ctx: anytype, x: anytype, y: anytype) OutputType {
                     _ = ctx;
                     const VecType = @TypeOf(x);
-                    if (VecType != CoordType) {
-                        @compileError("Expected coordinate vectors to match CoordType");
+                    if (VecType != CoordVecT) {
+                        @compileError("Expected coordinate vectors to match CoordVecT");
                     }
                     return th.vectorCast(OutputType, x) + th.vectorCast(OutputType, y) * th.splatWithCast(OutputType, 10);
                 }
             };
 
-            const result = zpp.generate(CoordType, .{}, processing_kernel.process);
+            const result = zpp.generate(CoordVecT, .{}, processing_kernel.process);
             zpp.process(result, destination);
 
             try std.testing.expectEqual(@as(ScalarType, 0.0), output[0]);
@@ -43,7 +46,7 @@ test "Generator: produce correct coordinates type: smaller region than batch siz
 test "Generator: produce correct coordinates type: larger region than batch size" {
     const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 4 };
 
-    inline for (AllTypes) |CoordType| {
+    inline for (CoordTypes) |CoordVecT| {
         inline for (AllTypes) |OutputType| {
             const ScalarType = @typeInfo(OutputType).vector.child;
 
@@ -54,14 +57,14 @@ test "Generator: produce correct coordinates type: larger region than batch size
                 fn process(ctx: anytype, x: anytype, y: anytype) OutputType {
                     _ = ctx;
                     const VecType = @TypeOf(x);
-                    if (VecType != CoordType) {
-                        @compileError("Expected coordinate vectors to match CoordType");
+                    if (VecType != CoordVecT) {
+                        @compileError("Expected coordinate vectors to match CoordVecT");
                     }
                     return th.vectorCast(OutputType, x) + th.vectorCast(OutputType, y) * th.splatWithCast(OutputType, 10);
                 }
             };
 
-            const result = zpp.generate(CoordType, .{}, processing_kernel.process);
+            const result = zpp.generate(CoordVecT, .{}, processing_kernel.process);
             zpp.process(result, destination);
 
             var expectedOutput = [_]ScalarType{0} ** 16;
@@ -79,7 +82,7 @@ test "Generator: produce correct coordinates type: larger region than batch size
 test "Generator: produce correct coordinates type: region width not multiple of batch size" {
     const region: zpp.Region = .{ .x = 0, .y = 0, .width = 5, .height = 4 };
 
-    inline for (AllTypes) |CoordType| {
+    inline for (CoordTypes) |CoordVecT| {
         inline for (AllTypes) |OutputType| {
             const ScalarType = @typeInfo(OutputType).vector.child;
 
@@ -90,14 +93,14 @@ test "Generator: produce correct coordinates type: region width not multiple of 
                 fn process(ctx: anytype, x: anytype, y: anytype) OutputType {
                     _ = ctx;
                     const VecType = @TypeOf(x);
-                    if (VecType != CoordType) {
-                        @compileError("Expected coordinate vectors to match CoordType");
+                    if (VecType != CoordVecT) {
+                        @compileError("Expected coordinate vectors to match CoordVecT");
                     }
                     return th.vectorCast(OutputType, x) + th.vectorCast(OutputType, y) * th.splatWithCast(OutputType, 10);
                 }
             };
 
-            const result = zpp.generate(CoordType, .{}, processing_kernel.process);
+            const result = zpp.generate(CoordVecT, .{}, processing_kernel.process);
             zpp.process(result, destination);
 
             var expectedOutput = [_]ScalarType{0} ** 20;
@@ -119,7 +122,7 @@ test "Generator: Only fill requested region: Same global size, different regions
     const output_region: zpp.Region = .{ .x = 2, .y = 1, .width = 5, .height = 3 };
     const output_stride = image_width;
 
-    inline for (AllTypes) |CoordType| {
+    inline for (CoordTypes) |CoordVecT| {
         inline for (AllTypes) |OutputType| {
             const ScalarType = @typeInfo(OutputType).vector.child;
 
@@ -130,13 +133,13 @@ test "Generator: Only fill requested region: Same global size, different regions
                 fn process(ctx: anytype, x: anytype, y: anytype) OutputType {
                     _ = ctx;
                     const VecType = @TypeOf(x);
-                    if (VecType != CoordType) {
-                        @compileError("Expected coordinate vectors to match CoordType");
+                    if (VecType != CoordVecT) {
+                        @compileError("Expected coordinate vectors to match CoordVecT");
                     }
                     return th.vectorCast(OutputType, x) + th.vectorCast(OutputType, y) * th.splatWithCast(OutputType, 10);
                 }
             };
-            const result = zpp.generate(CoordType, .{}, processing_kernel.process);
+            const result = zpp.generate(CoordVecT, .{}, processing_kernel.process);
             zpp.process(result, destination);
 
             const expected_data: [45]ScalarType = .{

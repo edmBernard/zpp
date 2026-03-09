@@ -69,10 +69,32 @@ fn ProcessReturnType(comptime process_fn: anytype) type {
 // MARK: Generator Result
 // ============================================================================
 
+fn coordVectorError(comptime CoordVecT: type, comptime detail: []const u8) noreturn {
+    @compileError("Coordinate vector type " ++ @typeName(CoordVecT) ++ " " ++ detail);
+}
+
+fn CoordScalarType(comptime CoordVecT: type) type {
+    return switch (@typeInfo(CoordVecT)) {
+        .vector => |info| switch (@typeInfo(info.child)) {
+            .int, .comptime_int, .float, .comptime_float => info.child,
+            else => coordVectorError(CoordVecT, "must use an integer or float scalar, got " ++ @typeName(info.child)),
+        },
+        else => coordVectorError(CoordVecT, "must be a vector type"),
+    };
+}
+
+fn coordVectorLen(comptime CoordVecT: type) comptime_int {
+    _ = CoordScalarType(CoordVecT);
+    return switch (@typeInfo(CoordVecT)) {
+        .vector => |info| info.len,
+        else => unreachable,
+    };
+}
+
 /// Generator result (no input source, just generates based on coordinates)
 /// Supports both single-channel (VecT) and multi-channel ([N]VecT) output.
 pub fn GeneratorResult(
-    comptime CoordT: type,
+    comptime CoordVecT: type,
     comptime ContextType: type,
     comptime process_fn: anytype,
     comptime vec_len: comptime_int,
@@ -87,33 +109,35 @@ pub fn GeneratorResult(
         /// Number of elements processed per evalAt call
         pub const vector_length = vec_len;
 
-        const iota = std.simd.iota(@typeInfo(CoordT).vector.child, vec_len);
+        const CoordScalarT = CoordScalarType(CoordVecT);
+        const iota = std.simd.iota(CoordScalarT, vec_len);
         const Self = @This();
 
         pub inline fn evalAt(self: Self, x: i32, y: i32) OutputType {
-            const x_vec: CoordT = iota + castScalarCoordToVector(CoordT, x);
-            const y_vec: CoordT = castScalarCoordToVector(CoordT, y);
+            const x_vec: CoordVecT = iota + splatCoordScalar(CoordVecT, x);
+            const y_vec: CoordVecT = splatCoordScalar(CoordVecT, y);
             return process_fn(self.context, x_vec, y_vec);
         }
     };
 }
 
-pub inline fn castScalarCoordToVector(comptime CoordT: type, value: i32) CoordT {
-    return switch (@typeInfo(CoordT).vector.child) {
-        f32 => @splat(@as(f32, @floatFromInt(value))),
-        u16, u8 => @splat(@intCast(value)),
-        else => @compileError("castScalarCoordToVector only supports f32, u16, u8 scalars"),
+pub inline fn splatCoordScalar(comptime CoordVecT: type, value: i32) CoordVecT {
+    const CoordScalarT = CoordScalarType(CoordVecT);
+    return switch (@typeInfo(CoordScalarT)) {
+        .float, .comptime_float => @as(CoordVecT, @splat(@as(CoordScalarT, @floatFromInt(value)))),
+        .int, .comptime_int => @as(CoordVecT, @splat(@as(CoordScalarT, @intCast(value)))),
+        else => unreachable,
     };
 }
 
 /// Create a generator (produces values from coordinates, no input)
 /// Supports both single-channel (VecT) and multi-channel ([N]VecT) output.
-/// The vector length is inferred from the VecT type.
+/// The coordinate vector length is inferred from `CoordVecT`.
 pub fn generate(
-    comptime VecT: type,
+    comptime CoordVecT: type,
     context: anytype,
     comptime process_fn: anytype,
-) GeneratorResult(VecT, @TypeOf(context), process_fn, @typeInfo(VecT).vector.len) {
+) GeneratorResult(CoordVecT, @TypeOf(context), process_fn, coordVectorLen(CoordVecT)) {
     return .{
         .context = context,
     };
@@ -240,11 +264,14 @@ pub fn LoopResult(
             };
 
             if (comptime has_coords) {
-                const CoordT = opts.coord_type.?;
-                const CoordElemT = @typeInfo(CoordT).vector.child;
-                const iota = std.simd.iota(CoordElemT, vec_len);
-                const x_coords: CoordT = iota + castScalarCoordToVector(CoordT, x);
-                const y_coords: CoordT = castScalarCoordToVector(CoordT, y);
+                const CoordVecT = opts.coord_type.?;
+                const CoordScalarT = CoordScalarType(CoordVecT);
+                if (comptime coordVectorLen(CoordVecT) != vec_len) {
+                    @compileError("Loop coordinate vector " ++ @typeName(CoordVecT) ++ " must use the same lane count as " ++ @typeName(VecT));
+                }
+                const iota = std.simd.iota(CoordScalarT, vec_len);
+                const x_coords: CoordVecT = iota + splatCoordScalar(CoordVecT, x);
+                const y_coords: CoordVecT = splatCoordScalar(CoordVecT, y);
                 return process_fn(self.context, accessor, x_coords, y_coords);
             } else {
                 return process_fn(self.context, accessor);

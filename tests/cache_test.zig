@@ -47,9 +47,11 @@ test "Cache: All loop result fit in cache" {
     };
 
     var ctx = kernel.Context{};
-    const result = try zpp.cachedLoop(f32x4, .{}, 2, std.testing.allocator, source, &ctx, kernel.process);
-    defer result.deinit();
-    const zipped_in = zpp.zip(.{ result, result });
+    const cached = try zpp.cachedLoop(f32x4, .{}, 2, std.testing.allocator, source, &ctx, kernel.process);
+    defer cached.deinit();
+    const cached_view = cached.view();
+    const copied_view = cached_view;
+    const zipped_in = zpp.zip(.{ cached_view, copied_view });
     const zipped_dest = zpp.zipDest(.{ destination, stats_dest });
     zpp.process(zipped_in, zipped_dest);
 
@@ -105,9 +107,10 @@ test "Cache: Smaller cache than loop result" {
     };
 
     var ctx = kernel.Context{};
-    const result = try zpp.cachedLoop(f32x4, .{}, 1, std.testing.allocator, source, &ctx, kernel.process);
-    defer result.deinit();
-    const zipped_in = zpp.zip(.{ result, result });
+    const cached = try zpp.cachedLoop(f32x4, .{}, 1, std.testing.allocator, source, &ctx, kernel.process);
+    defer cached.deinit();
+    const cached_view = cached.view();
+    const zipped_in = zpp.zip(.{ cached_view, cached_view });
     const zipped_dest = zpp.zipDest(.{ destination, stats_dest });
     zpp.process(zipped_in, zipped_dest);
 
@@ -120,4 +123,44 @@ test "Cache: Smaller cache than loop result" {
     try std.testing.expectEqual(360, stats_ctx.sum);
 
     try std.testing.expectEqual(2, ctx.calls);
+}
+
+// MARK: Cache: Owner/view split allows direct processing and copied views
+test "Cache: Owner/view split keeps ownership explicit" {
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
+
+    var input_data: [8]f32 = undefined;
+    th.fillRamp(f32, &input_data, 1, 1);
+    var output_data = [_]f32{0} ** 8;
+
+    const source = try zpp.makeSource(f32, &input_data, region.width, region);
+    const destination = try zpp.makeDest(f32, &output_data, region.width, region);
+
+    const kernel = struct {
+        const Context = struct {
+            calls: u32 = 0,
+        };
+
+        fn process(ctx: *Context, in: anytype) f32x4 {
+            ctx.calls += 1;
+            return in.get() * th.splatWithCast(f32x4, 2);
+        }
+    };
+
+    var ctx = kernel.Context{};
+    const cached = try zpp.cachedLoop(f32x4, .{}, 1, std.testing.allocator, source, &ctx, kernel.process);
+    defer cached.deinit();
+
+    const cached_view = cached.view();
+    const copied_view = cached_view;
+    const zipped = zpp.zip(.{ cached_view, copied_view });
+    const unzipped = zpp.unzip(zipped);
+    zpp.process(unzipped[0], destination);
+
+    const expected_data = [_]f32{
+        2,  4,  6,  8,
+        10, 12, 14, 16,
+    };
+    try std.testing.expectEqual(expected_data, output_data);
+    try std.testing.expectEqual(@as(u32, 2), ctx.calls);
 }

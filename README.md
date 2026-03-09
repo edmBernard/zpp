@@ -199,6 +199,8 @@ const MyKernel = struct {
 const generator = zpp.generate(f32v, context, processFunc);
 ```
 
+The first comptime argument is the coordinate vector type. The output type is inferred from the generator kernel's return value. Coordinate vectors may use integer or float scalars.
+
 **loop** transforms input data through a kernel:
 
 ```zig
@@ -214,6 +216,8 @@ const result = zpp.loop(f32v, .{ .margin = zpp.Margin.uniform(1) }, source, cont
 zpp.process(result, destination);
 ```
 
+`generate()` uses the destination region as its output region. Coordinates passed to the generator kernel are absolute image coordinates inside that destination region.
+
 ### Expression Trees
 
 One of ZPP's most powerful features is lazy evaluation through expression trees. Operations are chained without intermediate storage:
@@ -227,6 +231,25 @@ const step3 = zpp.loop(f32v, .{}, step2, gamma_ctx, gammaKernel);
 // Only now is computation triggered - all stages fuse together
 zpp.process(step3, destination);
 ```
+
+### Cached Loops
+
+`cachedLoop()` returns an owning handle. Keep that owner alive for the whole pipeline, and pass `owner.view()` into expression trees:
+
+```zig
+const cached = try zpp.cachedLoop(f32v, .{ .margin = zpp.Margin.vertical(1) }, 3, allocator, source, ctx, blurKernel);
+defer cached.deinit();
+
+const cached_view = cached.view();
+const sharpened = zpp.loop(f32v, .{}, cached_view, sharpen_ctx, sharpenKernel);
+zpp.process(sharpened, destination);
+```
+
+The returned view is cheap to copy and safe to use inside `zip`, `group`, or other composed pipelines. Only the owner has `deinit()`.
+
+### Stats Destinations
+
+`stats()` and `statsWithCoords()` do not allow overlapping remainder writes. Full SIMD batches arrive through `write()`. Checked remainders arrive through `writeScalar()`, which means only lane 0 is populated and the remaining lanes are zero.
 
 ### Translation
 
@@ -285,7 +308,7 @@ const resized = zpp.interpLoop(
 | `zip`, `unzip` | Combine/split multiple sources |
 | `group`, `ungroup` | Block-based operations |
 | `stats`, `statsWithCoords` | Statistical accumulation without memory writes |
-| `cachedLoop` | Result caching to avoid recomputation of complex operations |
+| `cachedLoop` | Cached loop owner; call `.view()` to compose the cached source |
 
 ### SIMD Math Functions
 
@@ -355,7 +378,7 @@ src/
 ├── math.zig          # SIMD math functions (sin, cos, exp, pow, etc.)
 ├── interpolation.zig # Interpolation methods (nearest, linear, cubic)
 ├── padding.zig       # Padding policies (ZeroPadding, RepeatEdgePadding)
-├── cache.zig         # Row caching for expression trees (RowCache, cachedLoop)
+├── cache.zig         # Row caching for expression trees (CachedLoopOwner, cachedLoop)
 ├── zip.zig           # zip/unzip for multiple sources
 ├── group.zig         # group/ungroup for Bayer patterns
 └── stats.zig         # Statistics accumulation (stats, statsWithCoords)

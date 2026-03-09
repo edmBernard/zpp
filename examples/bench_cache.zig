@@ -71,7 +71,7 @@ pub fn main() !void {
         const v_blur = zpp.loop(
             f32v,
             .{ .margin = .vertical(1) },
-            h_blur,
+            h_blur.view(),
             {},
             vBlurKernel,
         );

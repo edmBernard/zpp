@@ -8,8 +8,11 @@ const th = @import("test_helpers.zig");
 const f32x4 = @Vector(4, f32);
 const u16x4 = @Vector(4, u16);
 const u8x4 = @Vector(4, u8);
+const i16x4 = @Vector(4, i16);
+const i32x4 = @Vector(4, i32);
 
 const AllTypes = [_]type{ f32x4, u16x4, u8x4 };
+const CoordTypes = [_]type{ f32x4, u16x4, u8x4, i16x4, i32x4 };
 const AllScalarTypes = [_]type{ f32, u16, u8 };
 
 // MARK: Loop: produce correct type accessor
@@ -52,7 +55,7 @@ test "Loop: produce correct coordinates and loop type" {
     const region: zpp.Region = .{ .x = 0, .y = 0, .width = 2, .height = 2 };
 
     inline for (AllTypes) |LoopType| {
-        inline for (AllTypes) |CoordType| {
+        inline for (CoordTypes) |CoordVecT| {
             const ScalarType = @typeInfo(LoopType).vector.child;
 
             var input_data: [4]ScalarType = .{ 1.0, 2.0, 3.0, 4.0 };
@@ -69,17 +72,17 @@ test "Loop: produce correct coordinates and loop type" {
                     if (VecType != LoopType) {
                         @compileError("Expected coordinate vectors to match LoopType");
                     }
-                    if (@TypeOf(x) != CoordType) {
-                        @compileError("Expected coordinate vectors to match LoopType");
+                    if (@TypeOf(x) != CoordVecT) {
+                        @compileError("Expected coordinate vectors to match CoordVecT");
                     }
-                    if (@TypeOf(y) != CoordType) {
-                        @compileError("Expected coordinate vectors to match LoopType");
+                    if (@TypeOf(y) != CoordVecT) {
+                        @compileError("Expected coordinate vectors to match CoordVecT");
                     }
                     return th.vectorCast(VecType, x) + th.vectorCast(VecType, y) * th.splatWithCast(VecType, 10) + value * th.splatWithCast(VecType, 20);
                 }
             };
 
-            const result = zpp.loop(LoopType, .{ .coord_type = CoordType }, source, .{}, processing_kernel.process);
+            const result = zpp.loop(LoopType, .{ .coord_type = CoordVecT }, source, .{}, processing_kernel.process);
             zpp.process(result, destination);
 
             try std.testing.expectEqual(@as(ScalarType, 20.0), output[0]);
@@ -397,7 +400,7 @@ test "Loop: generator with coordinates at non-origin region" {
     const image_height: u32 = 6;
     const region: zpp.Region = .{ .x = 2, .y = 3, .width = 4, .height = 2 };
 
-    inline for (AllTypes) |CoordType| {
+    inline for (CoordTypes) |CoordVecT| {
         inline for (AllTypes) |OutputType| {
             const ScalarType = @typeInfo(OutputType).vector.child;
 
@@ -412,7 +415,7 @@ test "Loop: generator with coordinates at non-origin region" {
                 }
             };
 
-            const generator = zpp.generate(CoordType, .{}, gen_kernel.process);
+            const generator = zpp.generate(CoordVecT, .{}, gen_kernel.process);
             zpp.process(generator, destination);
 
             const expected_data: [image_width * image_height]ScalarType = .{

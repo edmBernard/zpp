@@ -9,7 +9,7 @@ const sources = @import("sources.zig");
 const Region = @import("region.zig").Region;
 const LoopOptions = @import("loop.zig").LoopOptions;
 const InputAccessor = @import("loop.zig").InputAccessor;
-const castScalarCoordToVector = @import("loop.zig").castScalarCoordToVector;
+const splatCoordScalar = @import("loop.zig").splatCoordScalar;
 
 /// Row cache for intermediate results in expression trees.
 /// Uses a circular buffer to store a sliding window of rows, avoiding recomputation
@@ -130,11 +130,7 @@ fn RowCache(comptime T: type, comptime max_rows: usize) type {
     };
 }
 
-/// A cached loop result that stores intermediate rows to avoid recomputation.
-/// This is the caching version of LoopResult
-/// The cache is heap-allocated so that copies of this struct (e.g. in Zip)
-/// share the same underlying cache, ensuring rows are computed only once.
-pub fn CachedLoopResult(
+fn CachedLoopState(
     comptime VecT: type,
     comptime SrcType: type,
     comptime CtxType: type,
@@ -150,8 +146,7 @@ pub fn CachedLoopResult(
         source: SrcType,
         context: CtxType,
         region: Region,
-        cache: *Cache,
-        allocator: std.mem.Allocator,
+        cache: Cache,
 
         pub const vector_length = vec_len;
         const Self = @This();
@@ -161,14 +156,8 @@ pub fn CachedLoopResult(
         else
             InputAccessor(SrcType, VecT);
 
-        /// Free cache memory and the heap allocation.
-        pub fn deinit(self: Self) void {
-            self.cache.deinit();
-            self.allocator.destroy(self.cache);
-        }
-
         /// Ensure rows needed for position (x, y) are computed and cached.
-        fn ensureRowsCached(self: Self, y: i32) void {
+        fn ensureRowsCached(self: *Self, y: i32) void {
             const y64: i64 = y;
             const above: i64 = opts.margin.top;
             const below: i64 = opts.margin.bottom;
@@ -184,7 +173,7 @@ pub fn CachedLoopResult(
         }
 
         /// Compute a single row and store it in the cache.
-        fn computeRow(self: Self, y: i64) void {
+        fn computeRow(self: *Self, y: i64) void {
             const row_buffer = self.cache.getRowBuffer(y);
             const y32: i32 = @intCast(y);
             const width = self.region.width;
@@ -215,7 +204,7 @@ pub fn CachedLoopResult(
         }
 
         /// Evaluate kernel at position (x, y32) and return the result vector.
-        inline fn evalKernel(self: Self, _: []ElemT, x: u32, y32: i32) VecT {
+        inline fn evalKernel(self: *const Self, _: []ElemT, x: u32, y32: i32) VecT {
             const x_offset: i32 = @intCast(x);
             const x32 = self.region.x + x_offset;
 
@@ -226,16 +215,16 @@ pub fn CachedLoopResult(
             };
 
             return if (has_coords) blk: {
-                const CoordT = opts.coord_type.?;
-                const iota = std.simd.iota(@typeInfo(CoordT).vector.child, vec_len);
-                const x_coords: CoordT = iota + castScalarCoordToVector(CoordT, x32);
-                const y_coords: CoordT = castScalarCoordToVector(CoordT, y32);
+                const CoordVecT = opts.coord_type.?;
+                const iota = std.simd.iota(@typeInfo(CoordVecT).vector.child, vec_len);
+                const x_coords: CoordVecT = iota + splatCoordScalar(CoordVecT, x32);
+                const y_coords: CoordVecT = splatCoordScalar(CoordVecT, y32);
                 break :blk kernel_fn(self.context, accessor, x_coords, y_coords);
             } else kernel_fn(self.context, accessor);
         }
 
         /// Evaluate at a specific position, using cached data.
-        pub fn evalAt(self: Self, x: i32, y: i32) VecT {
+        pub fn evalAt(self: *Self, x: i32, y: i32) VecT {
             // Ensure needed rows are cached
             self.ensureRowsCached(y);
 
@@ -255,10 +244,69 @@ pub fn CachedLoopResult(
     };
 }
 
+/// Copyable source view over cached loop state.
+/// This type is safe to duplicate inside expression trees because it does not own memory.
+pub fn CachedLoopView(
+    comptime VecT: type,
+    comptime SrcType: type,
+    comptime CtxType: type,
+    comptime kernel_fn: anytype,
+    comptime opts: LoopOptions,
+    comptime max_cache_rows: usize,
+) type {
+    const State = CachedLoopState(VecT, SrcType, CtxType, kernel_fn, opts, max_cache_rows);
+
+    return struct {
+        state: *State,
+        region: Region,
+
+        pub const vector_length = State.vector_length;
+        pub const OutputType = VecT;
+        const Self = @This();
+
+        pub inline fn evalAt(self: Self, x: i32, y: i32) VecT {
+            return self.state.evalAt(x, y);
+        }
+    };
+}
+
+/// Owning handle for cached loop state.
+/// Call `view()` to obtain the non-owning source that can be composed in expression trees.
+pub fn CachedLoopOwner(
+    comptime VecT: type,
+    comptime SrcType: type,
+    comptime CtxType: type,
+    comptime kernel_fn: anytype,
+    comptime opts: LoopOptions,
+    comptime max_cache_rows: usize,
+) type {
+    const State = CachedLoopState(VecT, SrcType, CtxType, kernel_fn, opts, max_cache_rows);
+    const View = CachedLoopView(VecT, SrcType, CtxType, kernel_fn, opts, max_cache_rows);
+
+    return struct {
+        allocator: std.mem.Allocator,
+        state: State,
+
+        const Self = @This();
+
+        pub fn view(self: *Self) View {
+            return .{
+                .state = &self.state,
+                .region = self.state.region,
+            };
+        }
+
+        pub fn deinit(self: *Self) void {
+            self.state.cache.deinit();
+            self.allocator.destroy(self);
+        }
+    };
+}
+
 /// Create a cached processing loop.
 /// Use this when you have vertical margins and want to avoid recomputing rows.
 /// The cache size should be at least `margin.top + 1 + margin.bottom`.
-/// The cache is heap-allocated so that copies share the same underlying data.
+/// Returns an owning handle; call `view()` to obtain the copyable source for expression trees.
 pub fn cachedLoop(
     comptime VecT: type,
     comptime opts: LoopOptions,
@@ -267,23 +315,27 @@ pub fn cachedLoop(
     source: anytype,
     context: anytype,
     comptime process_fn: anytype,
-) !CachedLoopResult(VecT, @TypeOf(source), @TypeOf(context), process_fn, opts, max_cache_rows) {
+) !*CachedLoopOwner(VecT, @TypeOf(source), @TypeOf(context), process_fn, opts, max_cache_rows) {
     comptime sources.assertIsSource(@TypeOf(source));
 
     const ElemT = @typeInfo(VecT).vector.child;
     const Cache = RowCache(ElemT, max_cache_rows);
+    const Owner = CachedLoopOwner(VecT, @TypeOf(source), @TypeOf(context), process_fn, opts, max_cache_rows);
 
-    const cache = try allocator.create(Cache);
-    errdefer allocator.destroy(cache);
-    cache.* = Cache.init(allocator);
-    errdefer cache.deinit();
-    try cache.setup(source.region.width, opts.margin.top, opts.margin.bottom);
+    const owner = try allocator.create(Owner);
+    errdefer allocator.destroy(owner);
 
-    return .{
-        .source = source,
-        .context = context,
-        .region = source.region,
-        .cache = cache,
+    owner.* = .{
         .allocator = allocator,
+        .state = .{
+            .source = source,
+            .context = context,
+            .region = source.region,
+            .cache = Cache.init(allocator),
+        },
     };
+    errdefer owner.state.cache.deinit();
+    try owner.state.cache.setup(source.region.width, opts.margin.top, opts.margin.bottom);
+
+    return owner;
 }

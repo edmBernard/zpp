@@ -12,7 +12,9 @@ const Region = @import("region.zig").Region;
 /// histograms, min/max values, sums, etc.
 ///
 /// The kernel receives the pixel value and coordinates, allowing it to accumulate
-/// statistics into a context structure.
+/// statistics into a context structure. Full SIMD batches arrive through `write()`.
+/// Checked remainders arrive through `writeScalar()`, where only lane 0 is populated
+/// and the remaining lanes are zero.
 pub fn StatsDest(
     comptime VecT: type,
     comptime ContextType: type,
@@ -80,7 +82,7 @@ pub fn StatsDest(
 ///     const Context = struct { sum: f32 = 0, count: u32 = 0 };
 ///     pub fn accumulate(ctx: *Context, values: f32x4) void {
 ///         ctx.sum += @reduce(.Add, values);
-///         ctx.count += 4;
+///         ctx.count += if (values[1] == 0 and values[2] == 0 and values[3] == 0) 1 else 4;
 ///     }
 /// };
 /// var ctx = stats_kernel.Context{};
