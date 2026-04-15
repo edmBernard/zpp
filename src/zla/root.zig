@@ -272,8 +272,10 @@ pub fn With(comptime VectorType: type) type {
 const testing = std.testing;
 
 fn expectVecEqual(comptime len: comptime_int, actual: @Vector(len, f32), expected: @Vector(len, f32)) !void {
+    const actual_arr: [len]f32 = actual;
+    const expected_arr: [len]f32 = expected;
     for (0..len) |i| {
-        try testing.expectApproxEqAbs(expected[i], actual[i], 1e-6);
+        try testing.expectApproxEqAbs(expected_arr[i], actual_arr[i], 1e-6);
     }
 }
 

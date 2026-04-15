@@ -76,24 +76,25 @@ fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32, square_s
 // MARK: PPM Image Output
 // ============================================================================
 
-fn writePPM(filename: []const u8, data: []const u8, width: u32, height: u32) !void {
-    const file = try std.fs.cwd().createFile(filename, .{});
-    defer file.close();
+const Io = std.Io;
+
+fn writePPM(io: Io, filename: []const u8, data: []const u8, width: u32, height: u32) !void {
+    const file = try Io.Dir.cwd().createFile(io, filename, .{});
+    defer file.close(io);
 
     var header_buf: [64]u8 = undefined;
     const header = std.fmt.bufPrint(&header_buf, "P6\n{d} {d}\n255\n", .{ width, height }) catch unreachable;
-    try file.writeAll(header);
-    try file.writeAll(data);
+    try file.writeStreamingAll(io, header);
+    try file.writeStreamingAll(io, data);
 }
 
 // ============================================================================
 // MARK: Main Entry Point
 // ============================================================================
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    const allocator = init.gpa;
 
     const width: u32 = 800;
     const height: u32 = 600;
@@ -104,15 +105,15 @@ pub fn main() !void {
     std.debug.print("SIMD vector length: {d}\n", .{vec_len});
     std.debug.print("Generating {d}x{d} image with {d}px squares...\n", .{ width, height, @as(u32, @intFromFloat(square_size)) });
 
-    const start = std.time.milliTimestamp();
+    const start = Io.Timestamp.now(io, .awake);
 
     const image_data = try generateImage(allocator, width, height, square_size);
     defer allocator.free(image_data);
 
-    const elapsed = std.time.milliTimestamp() - start;
+    const elapsed = start.untilNow(io, .awake).toMilliseconds();
     std.debug.print("Generation completed in {d}ms\n", .{elapsed});
 
     const filename = "checkerboard.ppm";
-    try writePPM(filename, image_data, width, height);
+    try writePPM(io, filename, image_data, width, height);
     std.debug.print("Image saved to: {s}\n", .{filename});
 }

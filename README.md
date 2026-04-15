@@ -64,10 +64,8 @@ const zpp = @import("zpp");
 const u8v = zpp.u8v;
 const f32v = zpp.VectorLike(u8v, f32);
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
 
     const width: u32 = 800;
     const height: u32 = 600;

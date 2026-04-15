@@ -18,6 +18,7 @@
 
 const std = @import("std");
 const zpp = @import("zpp");
+const Io = std.Io;
 
 // ============================================================================
 // MARK: SIMD Vector Configuration - Use 4-element vectors for chained operations
@@ -278,24 +279,23 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
 // MARK: PPM Image Output
 // ============================================================================
 
-fn writePPM(filename: []const u8, data: []const u8, width: u32, height: u32) !void {
-    const file = try std.fs.cwd().createFile(filename, .{});
-    defer file.close();
+fn writePPM(io: Io, filename: []const u8, data: []const u8, width: u32, height: u32) !void {
+    const file = try Io.Dir.cwd().createFile(io, filename, .{});
+    defer file.close(io);
 
     var header_buf: [64]u8 = undefined;
     const header = std.fmt.bufPrint(&header_buf, "P6\n{d} {d}\n255\n", .{ width, height }) catch unreachable;
-    try file.writeAll(header);
-    try file.writeAll(data);
+    try file.writeStreamingAll(io, header);
+    try file.writeStreamingAll(io, data);
 }
 
 // ============================================================================
 // MARK: Main Entry Point
 // ============================================================================
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    const allocator = init.gpa;
 
     const width: u32 = 800;
     const height: u32 = 600;
@@ -306,16 +306,16 @@ pub fn main() !void {
     std.debug.print("Pipeline: noise -> resize(2x) -> gradient -> gamma\n", .{});
     std.debug.print("Generating {d}x{d} image...\n", .{ width, height });
 
-    const start = std.time.milliTimestamp();
+    const start = Io.Timestamp.now(io, .awake);
 
     const image_data = try generateImage(allocator, width, height);
     defer allocator.free(image_data);
 
-    const elapsed = std.time.milliTimestamp() - start;
+    const elapsed = start.untilNow(io, .awake).toMilliseconds();
     std.debug.print("Generation completed in {d}ms\n", .{elapsed});
 
     const filename = "gradient_filter.ppm";
-    try writePPM(filename, image_data, width, height);
+    try writePPM(io, filename, image_data, width, height);
     std.debug.print("Image saved to: {s}\n", .{filename});
 }
 
@@ -325,11 +325,11 @@ pub fn main() !void {
 
 test "noise kernel produces valid values" {
     const ctx = NoiseContext{ .scale = zpp.math.splat(f32v, 50.0) };
-    const result = noiseKernel(ctx, zpp.math.splat(f32v, 25.0), zpp.math.splat(f32v, 25.0));
+    const result_arr: [vec_len]f32 = noiseKernel(ctx, zpp.math.splat(f32v, 25.0), zpp.math.splat(f32v, 25.0));
 
     for (0..vec_len) |i| {
         // Output should be in [0, 1] range after mapping
-        try std.testing.expect(result[i] >= 0.0 and result[i] <= 1.0);
+        try std.testing.expect(result_arr[i] >= 0.0 and result_arr[i] <= 1.0);
     }
 }
 

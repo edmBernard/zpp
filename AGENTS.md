@@ -4,7 +4,7 @@ Guidelines for AI coding agents working on the zpp (Zig Pixel Processing) codeba
 
 ## Project Overview
 
-- **Language:** Zig (minimum version 0.15.2)
+- **Language:** Zig (minimum version 0.16.0)
 - **Type:** SIMD pixel processing library with examples
 - **Purpose:** Efficient image processing using Zig's vector capabilities
 - **License:** Apache 2.0
@@ -48,7 +48,9 @@ Guidelines for AI coding agents working on the zpp (Zig Pixel Processing) codeba
 │   ├── checkerboard.zig      # Pattern generation example
 │   ├── simplex_noise.zig     # Procedural noise example
 │   ├── domain_warping.zig    # fBm domain warping example
-│   └── gradient_filter.zig   # Edge detection with expression trees
+│   ├── gradient_filter.zig   # Edge detection with expression trees
+│   ├── bench_cache.zig       # Cache benchmark
+│   └── bench_interpolation.zig # Interpolation benchmark
 └── zig-out/            # Build artifacts (gitignored)
 ```
 
@@ -63,6 +65,8 @@ Guidelines for AI coding agents working on the zpp (Zig Pixel Processing) codeba
 | `zig build run-simplex-noise` | Run simplex noise example |
 | `zig build run-domain-warping` | Run domain warping example |
 | `zig build run-gradient-filter` | Run gradient filter example |
+| `zig build run-bench-interpolation` | Run interpolation benchmark |
+| `zig build run-bench-cache` | Run cache benchmark |
 | `zig build --release=fast` | Build with speed optimizations |
 
 ## Running Tests
@@ -142,13 +146,22 @@ const Kernel = struct {
 - Always handle or propagate errors explicitly
 
 ### Resource Management
-Always pair allocations with `defer` cleanup immediately:
+Examples use "Juicy Main" (`std.process.Init`) for allocator and I/O:
 ```zig
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-defer _ = gpa.deinit();
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    const allocator = init.gpa;
 
-const file = try std.fs.cwd().createFile(filename, .{});
-defer file.close();
+    const file = try std.Io.Dir.cwd().createFile(io, filename, .{});
+    defer file.close(io);
+    try file.writeStreamingAll(io, data);
+}
+```
+
+For library code, always pair allocations with `defer` cleanup immediately:
+```zig
+const data = try allocator.alloc(f32, size);
+defer allocator.free(data);
 ```
 
 ### Comments
@@ -207,4 +220,3 @@ zpp.Process(step3, destination);
 
 1. **Vector length mismatch:** Ensure all SIMD operations use consistent vector lengths
 2. **Memory leaks:** Always pair allocations with `defer` cleanup
-3. **Missing error handling:** Use `try` or handle errors explicitly

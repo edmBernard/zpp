@@ -20,10 +20,11 @@ fn vBlurKernel(_: void, in: anytype) f32v {
     return (in.getAt(0, -1) + in.get() + in.getAt(0, 1)) * third;
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+const Io = std.Io;
+
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    const allocator = init.gpa;
 
     const width: u32 = 2048;
     const height: u32 = 2048;
@@ -53,7 +54,7 @@ pub fn main() !void {
     var times_without_cache: [num_iterations]u64 = undefined;
 
     for (0..num_iterations) |iter| {
-        var timer = std.time.Timer.start() catch unreachable;
+        const timer_start = Io.Timestamp.now(io, .awake);
 
         // Horizontal blur with cache (vertical margin for the subsequent vertical pass)
         const h_blur = try zpp.cachedLoop(
@@ -78,11 +79,11 @@ pub fn main() !void {
 
         zpp.process(v_blur, dest);
 
-        times_with_cache[iter] = timer.read();
+        times_with_cache[iter] = @intCast(timer_start.untilNow(io, .awake).toNanoseconds());
     }
 
     for (0..num_iterations) |iter| {
-        var timer = std.time.Timer.start() catch unreachable;
+        const timer_start = Io.Timestamp.now(io, .awake);
 
         // Horizontal blur without cache (vertical margin for the subsequent vertical pass)
         const h_blur = zpp.loop(
@@ -104,7 +105,7 @@ pub fn main() !void {
 
         zpp.process(v_blur, dest);
 
-        times_without_cache[iter] = timer.read();
+        times_without_cache[iter] = @intCast(timer_start.untilNow(io, .awake).toNanoseconds());
     }
 
     // Sort to find median

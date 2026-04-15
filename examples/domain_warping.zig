@@ -14,6 +14,7 @@
 
 const std = @import("std");
 const zpp = @import("zpp");
+const Io = std.Io;
 
 // ============================================================================
 // MARK: SIMD Vector Configuration - Use zpp's recommended vector length
@@ -236,24 +237,23 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
 // MARK: PPM Image Output
 // ============================================================================
 
-fn writePPM(filename: []const u8, data: []const u8, width: u32, height: u32) !void {
-    const file = try std.fs.cwd().createFile(filename, .{});
-    defer file.close();
+fn writePPM(io: Io, filename: []const u8, data: []const u8, width: u32, height: u32) !void {
+    const file = try Io.Dir.cwd().createFile(io, filename, .{});
+    defer file.close(io);
 
     var header_buf: [64]u8 = undefined;
     const header = std.fmt.bufPrint(&header_buf, "P6\n{d} {d}\n255\n", .{ width, height }) catch unreachable;
-    try file.writeAll(header);
-    try file.writeAll(data);
+    try file.writeStreamingAll(io, header);
+    try file.writeStreamingAll(io, data);
 }
 
 // ============================================================================
 // MARK: Main Entry Point
 // ============================================================================
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    const allocator = init.gpa;
 
     const width: u32 = 6000;
     const height: u32 = 4000;
@@ -263,16 +263,16 @@ pub fn main() !void {
     std.debug.print("SIMD vector length: {d} (from zpp.suggested_vec_len)\n", .{vec_len});
     std.debug.print("Generating {d}x{d} image...\n", .{ width, height });
 
-    const start = std.time.milliTimestamp();
+    const start = Io.Timestamp.now(io, .awake);
 
     const image_data = try generateImage(allocator, width, height);
     defer allocator.free(image_data);
 
-    const elapsed = std.time.milliTimestamp() - start;
+    const elapsed = start.untilNow(io, .awake).toMilliseconds();
     std.debug.print("Generation completed in {d}ms\n", .{elapsed});
 
     const filename = "domain_warping.ppm";
-    try writePPM(filename, image_data, width, height);
+    try writePPM(io, filename, image_data, width, height);
     std.debug.print("Image saved to: {s}\n", .{filename});
 }
 
@@ -284,7 +284,7 @@ const vec_len = @typeInfo(u8v).vector.len;
 
 test "simplex noise produces values in expected range" {
     const p = Vec2{ .x = la.splat(0.5), .y = la.splat(0.5) };
-    const n = noise(p);
+    const n: [vec_len]f32 = noise(p);
     for (0..vec_len) |i| {
         try std.testing.expect(n[i] >= -2.0 and n[i] <= 2.0);
     }
@@ -292,7 +292,7 @@ test "simplex noise produces values in expected range" {
 
 test "fbm produces values" {
     const p = Vec2{ .x = la.splat(0.5), .y = la.splat(0.5) };
-    const f = fbm(4, p);
+    const f: [vec_len]f32 = fbm(4, p);
     for (0..vec_len) |i| {
         try std.testing.expect(!std.math.isNan(f[i]));
     }
@@ -305,11 +305,14 @@ test "domain warping kernel produces valid RGB" {
     };
     const rgb = domainWarpingProcess(ctx, la.splat(100.0), la.splat(100.0));
 
+    const r: [vec_len]u8 = rgb[0];
+    const g: [vec_len]u8 = rgb[1];
+    const b: [vec_len]u8 = rgb[2];
     for (0..vec_len) |i| {
         // RGB values are u8, so always in [0, 255] range
-        try std.testing.expect(rgb[0][i] <= 255);
-        try std.testing.expect(rgb[1][i] <= 255);
-        try std.testing.expect(rgb[2][i] <= 255);
+        try std.testing.expect(r[i] <= 255);
+        try std.testing.expect(g[i] <= 255);
+        try std.testing.expect(b[i] <= 255);
     }
 }
 
@@ -326,15 +329,20 @@ test "hash function produces consistent values" {
     const h1 = hash(p1);
     const h2 = hash(p2);
 
+    const h1x: [vec_len]f32 = h1.x;
+    const h1y: [vec_len]f32 = h1.y;
+    const h2x: [vec_len]f32 = h2.x;
+    const h2y: [vec_len]f32 = h2.y;
+
     // Same input should produce same output
     for (0..vec_len) |i| {
-        try std.testing.expectEqual(h1.x[i], h2.x[i]);
-        try std.testing.expectEqual(h1.y[i], h2.y[i]);
+        try std.testing.expectEqual(h1x[i], h2x[i]);
+        try std.testing.expectEqual(h1y[i], h2y[i]);
     }
 
     // Hash values should be in [-1, 1] range
     for (0..vec_len) |i| {
-        try std.testing.expect(h1.x[i] >= -1.0 and h1.x[i] <= 1.0);
-        try std.testing.expect(h1.y[i] >= -1.0 and h1.y[i] <= 1.0);
+        try std.testing.expect(h1x[i] >= -1.0 and h1x[i] <= 1.0);
+        try std.testing.expect(h1y[i] >= -1.0 and h1y[i] <= 1.0);
     }
 }

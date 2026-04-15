@@ -14,6 +14,8 @@ fn resizeKernel(_: void, interp: anytype, x: f32v, y: f32v) f32v {
     return interp.sample(x * half, y * half);
 }
 
+const Io = std.Io;
+
 fn runBenchmark(
     comptime method: zpp.InterpolationMethod,
     comptime label: []const u8,
@@ -21,16 +23,17 @@ fn runBenchmark(
     output_region: zpp.Region,
     dest: anytype,
     comptime num_iterations: u32,
+    io: Io,
 ) void {
     var times: [num_iterations]u64 = undefined;
 
     for (0..num_iterations) |iter| {
-        var timer = std.time.Timer.start() catch unreachable;
+        const timer_start = Io.Timestamp.now(io, .awake);
 
         const interp = zpp.interpLoop(f32v, method, source, output_region, {}, resizeKernel);
         zpp.process(interp, dest);
 
-        times[iter] = timer.read();
+        times[iter] = @intCast(timer_start.untilNow(io, .awake).toNanoseconds());
     }
 
     // Sort to find median
@@ -43,10 +46,8 @@ fn runBenchmark(
     std.debug.print("  {s}: {d:.1} ms  ({d:.1} Mpix/s)\n", .{ label, median_ms, mpixels_per_sec });
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
 
     const src_w: u32 = 2048;
     const src_h: u32 = 2048;
@@ -76,9 +77,9 @@ pub fn main() !void {
     const source = try zpp.makeSource(f32, src_data, src_w, src_region);
     const dest = try zpp.makeDest(f32, dst_data, dst_w, dst_region);
 
-    runBenchmark(.nearest, "Nearest", source, dst_region, dest, num_iterations);
-    runBenchmark(.linear, "Linear ", source, dst_region, dest, num_iterations);
-    runBenchmark(.cubic, "Cubic  ", source, dst_region, dest, num_iterations);
+    runBenchmark(.nearest, "Nearest", source, dst_region, dest, num_iterations, init.io);
+    runBenchmark(.linear, "Linear ", source, dst_region, dest, num_iterations, init.io);
+    runBenchmark(.cubic, "Cubic  ", source, dst_region, dest, num_iterations, init.io);
 
     std.debug.print("\nDone.\n", .{});
 }
