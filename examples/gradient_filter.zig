@@ -266,7 +266,7 @@ pub fn generateImage(allocator: std.mem.Allocator, width: u32, height: u32) ![]u
     for (0..gray_size) |i| {
         // Clamp and convert to u8
         const gray_val = std.math.clamp(gray_data[i], 0.0, 1.0);
-        const byte_val: u8 = @intFromFloat(gray_val * 255.0);
+        const byte_val: u8 = @trunc(gray_val * 255.0);
         rgb_data[i * 3 + 0] = byte_val; // R
         rgb_data[i * 3 + 1] = byte_val; // G
         rgb_data[i * 3 + 2] = byte_val; // B

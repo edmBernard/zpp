@@ -123,7 +123,7 @@ pub fn noiseProcess(ctx: NoiseContext, x: f32v, y: f32v) [3]u8v {
     const n = noise(.{ .x = xs, .y = ys });
 
     // Map from [-1, 1] to [0, 255] for grayscale output
-    const gray: u8v = @intFromFloat(@max(la.splat(0.0), @min(la.splat(255.0), (n * la.splat(0.5) + la.splat(0.5)) * la.splat(255.0))));
+    const gray: u8v = @trunc(@max(la.splat(0.0), @min(la.splat(255.0), (n * la.splat(0.5) + la.splat(0.5)) * la.splat(255.0))));
 
     // Output as grayscale RGB
     return .{ gray, gray, gray };

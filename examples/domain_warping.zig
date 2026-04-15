@@ -197,9 +197,9 @@ pub fn domainWarpingProcess(ctx: DomainWarpingContext, x: f32v, y: f32v) [3]u8v 
     const splat_0: f32v = @splat(0.0);
     const splat_255: f32v = @splat(255.0);
     return .{
-        @intFromFloat(@max(splat_0, @min(splat_255, col.x * splat_255))),
-        @intFromFloat(@max(splat_0, @min(splat_255, col.y * splat_255))),
-        @intFromFloat(@max(splat_0, @min(splat_255, col.z * splat_255))),
+        @trunc(@max(splat_0, @min(splat_255, col.x * splat_255))),
+        @trunc(@max(splat_0, @min(splat_255, col.y * splat_255))),
+        @trunc(@max(splat_0, @min(splat_255, col.z * splat_255))),
     };
 }
 

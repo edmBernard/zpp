@@ -21,7 +21,7 @@ pub fn splatWithCast(comptime VecT: type, value: anytype) VecT {
         .int => {
             switch (@typeInfo(@TypeOf(value))) {
                 .int, .comptime_int => return @as(VecT, @splat(@intCast(value))),
-                .float, .comptime_float => return @as(VecT, @splat(@intFromFloat(value))),
+                .float, .comptime_float => return @as(VecT, @splat(@trunc(value))),
                 else => @compileError("splatWithCast only supports int and float scalar values to int"),
             }
         },
@@ -41,7 +41,7 @@ pub fn vectorCast(comptime VecT: type, value: anytype) VecT {
         .int => {
             switch (@typeInfo(@typeInfo(@TypeOf(value)).vector.child)) {
                 .int, .comptime_int => return @as(VecT, @intCast(value)),
-                .float, .comptime_float => return @as(VecT, @intFromFloat(value)),
+                .float, .comptime_float => return @as(VecT, @trunc(value)),
                 else => @compileError("splatWithConversion only supports int and float scalar values to int"),
             }
         },
@@ -61,7 +61,7 @@ pub fn scalarCast(comptime T: type, value: anytype) T {
         .int => {
             switch (@typeInfo(@TypeOf(value))) {
                 .int, .comptime_int => return @as(T, @intCast(value)),
-                .float, .comptime_float => return @as(T, @intFromFloat(value)),
+                .float, .comptime_float => return @as(T, @trunc(value)),
                 else => @compileError("vectorCast only supports int and float scalar values to int"),
             }
         },

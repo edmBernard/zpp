@@ -90,7 +90,7 @@ pub fn main(init: std.process.Init) !void {
         fn toBytes(value: f32v) u8v {
             const zero: f32v = @splat(0.0);
             const max_byte: f32v = @splat(255.0);
-            return @intFromFloat(@max(zero, @min(max_byte, value * max_byte)));
+            return @trunc(@max(zero, @min(max_byte, value * max_byte)));
         }
 
         fn process(ctx: Context, x: f32v, y: f32v) [3]u8v {

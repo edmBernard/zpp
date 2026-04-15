@@ -51,8 +51,8 @@ pub fn PixelInterpolator(comptime SourceType: type, comptime VecT: type, comptim
             const y_rounded = @round(y);
 
             inline for (0..vec_len) |i| {
-                const xi: i32 = @intFromFloat(x_rounded[i]);
-                const yi: i32 = @intFromFloat(y_rounded[i]);
+                const xi: i32 = @round(x_rounded[i]);
+                const yi: i32 = @round(y_rounded[i]);
                 result[i] = self.readPixel(xi, yi);
             }
             return result;
@@ -67,8 +67,8 @@ pub fn PixelInterpolator(comptime SourceType: type, comptime VecT: type, comptim
                 const yf = y[i];
 
                 // Get integer coordinates
-                const x0: i32 = @intFromFloat(@floor(xf));
-                const y0: i32 = @intFromFloat(@floor(yf));
+                const x0: i32 = @floor(xf);
+                const y0: i32 = @floor(yf);
                 const x1 = x0 + 1;
                 const y1 = y0 + 1;
 
@@ -99,8 +99,8 @@ pub fn PixelInterpolator(comptime SourceType: type, comptime VecT: type, comptim
                 const yf = y[i];
 
                 // Get integer coordinates (center of 4x4 patch)
-                const x1: i32 = @intFromFloat(@floor(xf));
-                const y1: i32 = @intFromFloat(@floor(yf));
+                const x1: i32 = @floor(xf);
+                const y1: i32 = @floor(yf);
 
                 // Fractional parts
                 const fx = xf - @floor(xf);

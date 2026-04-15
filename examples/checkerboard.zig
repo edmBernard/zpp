@@ -32,8 +32,8 @@ const CheckerboardContext = struct {
 /// Returns RGB values as u8 (black or white based on checker pattern).
 fn checkerboardProcess(ctx: CheckerboardContext, x: f32v, y: f32v) [3]u8v {
     // Compute which square we're in
-    const col: i32v = @intFromFloat(x / ctx.square_size);
-    const row: i32v = @intFromFloat(y / ctx.square_size);
+    const col: i32v = @trunc(x / ctx.square_size);
+    const row: i32v = @trunc(y / ctx.square_size);
 
     // XOR the column and row parity to get checkerboard pattern
     const parity = (col ^ row) & @as(i32v, @splat(1));
@@ -103,7 +103,7 @@ pub fn main(init: std.process.Init) !void {
     std.debug.print("Checkerboard Example using ZPP\n", .{});
     std.debug.print("==============================\n", .{});
     std.debug.print("SIMD vector length: {d}\n", .{vec_len});
-    std.debug.print("Generating {d}x{d} image with {d}px squares...\n", .{ width, height, @as(u32, @intFromFloat(square_size)) });
+    std.debug.print("Generating {d}x{d} image with {d}px squares...\n", .{ width, height, @as(u32, @trunc(square_size)) });
 
     const start = Io.Timestamp.now(io, .awake);
 
