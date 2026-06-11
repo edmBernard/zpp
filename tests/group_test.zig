@@ -357,6 +357,52 @@ test "Group: ungroup round-trip preserves u16 source values" {
     try std.testing.expectEqual(input, output);
 }
 
+test "Group: ungroup round-trip preserves values on the SIMD vector path" {
+    // Wide enough that process() uses full-vector writes for any platform
+    // vector length (u16 suggests up to 32 lanes on AVX-512), not only the
+    // scalar remainder fallback that narrow images exercise.
+    const width = 64;
+    const height = 4;
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = width, .height = height };
+
+    var input: [width * height]u16 = undefined;
+    for (&input, 0..) |*v, i| v.* = @intCast(i + 1);
+    var output = [_]u16{0} ** (width * height);
+
+    const source = try zpp.makeSource(u16, &input, width, region);
+    const destination = try zpp.makeDest(u16, &output, width, region);
+
+    zpp.process(zpp.ungroup(2, 2, zpp.group(2, 2, source)), destination);
+
+    try std.testing.expectEqual(input, output);
+}
+
+test "Group: ungroup handles destination region with odd origin" {
+    // An odd destination origin makes process() evaluate the ungrouped source
+    // at x positions that are not group-aligned (local_x != 0).
+    const width = 64;
+    const height = 2;
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = width, .height = height };
+    const dest_region: zpp.Region = .{ .x = 1, .y = 0, .width = width - 1, .height = height };
+
+    var input: [width * height]u16 = undefined;
+    for (&input, 0..) |*v, i| v.* = @intCast(i + 1);
+    var output = [_]u16{0} ** (width * height);
+
+    const source = try zpp.makeSource(u16, &input, width, region);
+    const destination = try zpp.makeDest(u16, &output, width, dest_region);
+
+    zpp.process(zpp.ungroup(2, 2, zpp.group(2, 2, source)), destination);
+
+    for (0..height) |y| {
+        // Column 0 is outside the destination region and must stay untouched.
+        try std.testing.expectEqual(@as(u16, 0), output[y * width]);
+        for (1..width) |x| {
+            try std.testing.expectEqual(input[y * width + x], output[y * width + x]);
+        }
+    }
+}
+
 test "Group: loop accessor preserves grouped integer vectors" {
     const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 4 };
 

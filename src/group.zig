@@ -129,22 +129,37 @@ pub fn UngroupSource(comptime GroupedSource: type, comptime P: comptime_int, com
 
         const Self = @This();
 
-        /// Evaluate at an ungrouped position
+        /// Evaluate at an ungrouped position.
+        /// Lane i of the result is the ungrouped pixel (x + i, y), matching the
+        /// contract expected by process(). In a grouped result the lanes span
+        /// consecutive *groups*, so the P channels of the matching row are
+        /// re-interlaced back into pixel order.
         pub inline fn evalAt(self: Self, x: i32, y: i32) VecT {
             // Map ungrouped coordinates to grouped coordinates
             const group_x = @divFloor(x, P);
             const group_y = @divFloor(y, Q);
+            // Phase of x within its group: pixel (x + i) lives in channel
+            // (i + local_x) % P of group group_x + (i + local_x) / P.
             const local_x: usize = @intCast(@mod(x, P));
             const local_y: usize = @intCast(@mod(y, Q));
 
-            // Get the grouped values
+            // One grouped evaluation covers groups group_x .. group_x + vec_len - 1,
+            // which is enough for all vec_len ungrouped pixels.
             const grouped_values = self.grouped.evalAt(group_x, group_y);
 
-            // Extract the appropriate pixel
             inline for (0..Q) |dy| {
-                inline for (0..P) |dx| {
-                    if (local_x == dx and local_y == dy) {
-                        return grouped_values[dy * P + dx];
+                if (local_y == dy) {
+                    // Interlace the P channels of this row: wide[j] holds the
+                    // ungrouped pixel at group_x * P + j.
+                    var channels: [P]VecT = undefined;
+                    inline for (0..P) |dx| {
+                        channels[dx] = grouped_values[dy * P + dx];
+                    }
+                    const wide = std.simd.interlace(channels);
+                    inline for (0..P) |shift| {
+                        if (local_x == shift) {
+                            return std.simd.extract(wide, shift, vec_len);
+                        }
                     }
                 }
             }

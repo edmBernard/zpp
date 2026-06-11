@@ -210,6 +210,47 @@ test "Stats destination: compute on the given region" {
     try std.testing.expectEqual(@as(f32, 144), stats_ctx.sum_val);
 }
 
+// MARK: Stats destination: coords are absolute for non-zero region origin
+test "Stats destination: coords are absolute for non-zero region origin" {
+    const image_width = 9;
+    const image_height = 5;
+    const region_in: zpp.Region = .{ .x = 0, .y = 0, .width = image_width, .height = image_height };
+    const region_stat: zpp.Region = .{ .x = 2, .y = 1, .width = 4, .height = 2 };
+
+    var input_data = [_]f32{1} ** (image_width * image_height);
+    const source = try zpp.makeSource(f32, &input_data, region_in.width, region_in);
+
+    const stat_kernel = struct {
+        const Context = struct {
+            min_x: i32 = std.math.maxInt(i32),
+            max_x: i32 = std.math.minInt(i32),
+            min_y: i32 = std.math.maxInt(i32),
+            max_y: i32 = std.math.minInt(i32),
+        };
+
+        fn accumulate(ctx: *Context, values: f32x4, x: @Vector(4, i32), y: @Vector(4, i32)) void {
+            inline for (0..4) |i| {
+                if (values[i] != 0) {
+                    ctx.min_x = @min(ctx.min_x, x[i]);
+                    ctx.max_x = @max(ctx.max_x, x[i]);
+                    ctx.min_y = @min(ctx.min_y, y[i]);
+                    ctx.max_y = @max(ctx.max_y, y[i]);
+                }
+            }
+        }
+    };
+
+    var stats_ctx = stat_kernel.Context{};
+    const stats_dest = zpp.statsWithCoords(f32x4, &stats_ctx, region_stat, stat_kernel.accumulate);
+    zpp.process(source, stats_dest);
+
+    // The kernel must see absolute image coordinates: x in [2, 6), y in [1, 3).
+    try std.testing.expectEqual(@as(i32, 2), stats_ctx.min_x);
+    try std.testing.expectEqual(@as(i32, 5), stats_ctx.max_x);
+    try std.testing.expectEqual(@as(i32, 1), stats_ctx.min_y);
+    try std.testing.expectEqual(@as(i32, 2), stats_ctx.max_y);
+}
+
 // MARK: Stats destination: compute stat directly from source
 test "Stats destination: compute stat directly from source" {
     const image_width = 9;

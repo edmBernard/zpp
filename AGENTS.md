@@ -18,16 +18,16 @@ Guidelines for AI coding agents working on the zpp (Zig Pixel Processing) codeba
 ├── src/
 │   ├── root.zig        # Library entry point - re-exports all public API
 │   ├── region.zig      # Region and Margin types
-│   ├── sources.zig     # Input/Output buffer wrappers (In, Out, InterleavedOut)
-│   ├── translate.zig   # Zero-cost integer translation (Translate)
-│   ├── loop.zig        # Core processing primitives (Loop, Generate, Process)
+│   ├── sources.zig     # Input/Output buffer wrappers (makeSource, makeDest, makeInterleavedDest)
+│   ├── translate.zig   # Zero-cost integer translation (translate)
+│   ├── loop.zig        # Core processing primitives (loop, generate, process)
 │   ├── math.zig        # SIMD math functions (sin, cos, exp, pow, etc.)
-│   ├── interpolation.zig # Interpolation methods (Nearest, Linear, Cubic)
+│   ├── interpolation.zig # Interpolation methods (nearest, linear, cubic)
 │   ├── padding.zig     # Padding policies (ZeroPadding, RepeatEdgePadding)
-│   ├── cache.zig       # Row caching for expression trees (RowCache, CachedLoop)
-│   ├── zip.zig         # Zip/Unzip for multiple sources
-│   ├── group.zig       # Group/Ungroup for Bayer patterns
-│   └── stats.zig       # Statistics accumulation (Stats, StatsWithCoords)
+│   ├── cache.zig       # Row caching for expression trees (CachedLoopOwner, cachedLoop)
+│   ├── zip.zig         # zip/unzip for multiple sources
+│   ├── group.zig       # group/ungroup for Bayer patterns
+│   └── stats.zig       # Statistics accumulation (stats, statsWithCoords)
 ├── tests/
 │   ├── root.zig              # Test entry point - imports all test modules
 │   ├── test_helpers.zig      # Shared test utilities (fillRamp, vectorCast, etc.)
@@ -128,7 +128,7 @@ Kernels have a context struct and a process function:
 const Kernel = struct {
     const Context = struct {
         scale: f32v,
-    }
+    };
 
     pub fn process(ctx: Context, in: anytype) f32v {
         return in.get() * ctx.scale;
@@ -188,32 +188,32 @@ test "region inflation preserves center" {
 const region = zpp.Region{ .x = 0, .y = 0, .width = 800, .height = 600 };
 
 // Input/Output sources
-const source = zpp.In(f32, &input_data, stride, region);
-const destination = zpp.Out(f32, &output_data, stride, region);
-const rgb_dest = zpp.InterleavedOut(u8, 3, rgb_data, width, region);
+const source = try zpp.makeSource(f32, &input_data, stride, region);
+const destination = try zpp.makeDest(f32, &output_data, stride, region);
+const rgb_dest = try zpp.makeInterleavedDest(u8, 3, rgb_data, width, region);
 
 // Generator (creates from coordinates)
-const generator = zpp.Generate(f32v, context, processFunc);
-zpp.Process(generator, destination);
+const generator = zpp.generate(f32v, context, processFunc);
+zpp.process(generator, destination);
 
 // Loop (transforms input)
-const result = zpp.Loop(f32v, .{}, source, context, processFunc);
-zpp.Process(result, destination);
+const result = zpp.loop(f32v, .{}, source, context, processFunc);
+zpp.process(result, destination);
 
 // With margins for convolution
-const result = zpp.Loop(f32v, .{ .margin = zpp.marginI(1) }, source, ctx, kernel);
+const result = zpp.loop(f32v, .{ .margin = zpp.Margin.uniform(1) }, source, ctx, kernel);
 
 // Translation (zero-cost integer pixel shift)
-const shifted = zpp.Translate(source, 10, 5);  // shift right 10, down 5
-zpp.Process(shifted, destination);
+const shifted = zpp.translate(source, 10, 5); // shift right 10, down 5
+zpp.process(shifted, destination);
 ```
 
 ### Expression Trees (lazy chaining)
 ```zig
-const step1 = zpp.Loop(f32v, .{}, source, ctx1, kernel1);
-const step2 = zpp.InterpLoop(f32v, .Linear, step1, output_region, ctx2, resize_kernel);
-const step3 = zpp.Loop(f32v, .{ .margin = zpp.marginI(1) }, step2, ctx3, gradient_kernel);
-zpp.Process(step3, destination);
+const step1 = zpp.loop(f32v, .{}, source, ctx1, kernel1);
+const step2 = zpp.interpLoop(f32v, .linear, step1, output_region, ctx2, resize_kernel);
+const step3 = zpp.loop(f32v, .{ .margin = zpp.Margin.uniform(1) }, step2, ctx3, gradient_kernel);
+zpp.process(step3, destination);
 ```
 
 ## Common Pitfalls

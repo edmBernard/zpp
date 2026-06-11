@@ -37,15 +37,14 @@ pub fn StatsDest(
         }
 
         /// Calls the user's stats kernel on a simd batch.
+        /// The incoming (x, y) are already absolute image coordinates.
         pub fn write(self: Self, x: u32, y: u32, values: VecT) void {
             if (has_coords) {
                 const iota = std.simd.iota(i32, vec_len);
                 const xi: i32 = @intCast(x);
                 const yi: i32 = @intCast(y);
-                const x_base = self.region.x + xi;
-                const y_base = self.region.y + yi;
-                const x_vec: @Vector(vec_len, i32) = iota + @as(@Vector(vec_len, i32), @splat(x_base));
-                const y_vec: @Vector(vec_len, i32) = @splat(y_base);
+                const x_vec: @Vector(vec_len, i32) = iota + @as(@Vector(vec_len, i32), @splat(xi));
+                const y_vec: @Vector(vec_len, i32) = @splat(yi);
                 accumulate_fn(self.context, values, x_vec, y_vec);
             } else {
                 accumulate_fn(self.context, values);
@@ -60,10 +59,8 @@ pub fn StatsDest(
             if (has_coords) {
                 const xi: i32 = @intCast(x);
                 const yi: i32 = @intCast(y);
-                const x_base = self.region.x + xi;
-                const y_base = self.region.y + yi;
-                const x_vec: @Vector(vec_len, i32) = @splat(x_base);
-                const y_vec: @Vector(vec_len, i32) = @splat(y_base);
+                const x_vec: @Vector(vec_len, i32) = @splat(xi);
+                const y_vec: @Vector(vec_len, i32) = @splat(yi);
                 accumulate_fn(self.context, single, x_vec, y_vec);
             } else {
                 accumulate_fn(self.context, single);
