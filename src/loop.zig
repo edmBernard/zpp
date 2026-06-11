@@ -20,6 +20,14 @@ const Margin = @import("region.zig").Margin;
 /// Options for Loop operations.
 pub const LoopOptions = struct {
     coord_type: ?type = null,
+    /// The maximum neighborhood the kernel is allowed to read through the
+    /// accessor: `getAt(dx, dy)` requires dx in [-left, right] and
+    /// dy in [-top, bottom].
+    ///
+    /// This declaration is a contract, not a hint: the interior fast path
+    /// uses unchecked reads sized from it, so reading outside the declared
+    /// margin is undefined behavior in unsafe builds. Violations trip an
+    /// assertion in safe builds.
     margin: Margin = .{},
 };
 
@@ -63,6 +71,40 @@ pub fn vectorLen(comptime T: type) comptime_int {
 fn ProcessReturnType(comptime process_fn: anytype) type {
     const fn_info = @typeInfo(@TypeOf(process_fn)).@"fn";
     return fn_info.return_type.?;
+}
+
+/// Comptime check that a chained source's vector width matches the loop's
+/// VecT lane count. A mismatch would make process() advance positions by the
+/// wrong step and silently corrupt the output.
+///
+/// Read-kind sources (InputSource and wrappers) adapt to any lane count and
+/// are not checked. Zip/group sources are checked recursively: their
+/// accessors re-read adaptive nested sources at VecT's lane count, so only
+/// fixed-width (eval-kind) nested stages constrain the loop.
+pub fn assertSourceVectorLength(comptime VecT: type, comptime SourceType: type) void {
+    if (comptime isZipSourceType(SourceType)) {
+        inline for (zip.sourceTypesFromTuple(SourceType.Sources)) |NestedType| {
+            assertSourceVectorLength(VecT, NestedType);
+        }
+        return;
+    }
+    if (comptime isGroupSourceType(SourceType)) {
+        assertSourceVectorLength(VecT, @FieldType(SourceType, "nested"));
+        return;
+    }
+    if (comptime sources.SourceTraits(SourceType).kind == .read) {
+        return;
+    }
+
+    const vec_len = @typeInfo(VecT).vector.len;
+    if (zip.getSourceVecLen(SourceType)) |src_len| {
+        if (src_len != vec_len) {
+            @compileError(std.fmt.comptimePrint(
+                "loop vector type {s} has {d} lanes but source {s} produces {d}-lane vectors; every stage of an expression tree must use the same lane count",
+                .{ @typeName(VecT), vec_len, @typeName(SourceType), src_len },
+            ));
+        }
+    }
 }
 
 // ============================================================================
@@ -150,7 +192,10 @@ pub fn generate(
 /// Input accessor that provides neighborhood access for kernels.
 /// Supports configurable vector length and uses the source's padding policy.
 /// When unchecked=true, skips bounds checking for the interior fast path.
-pub fn InputAccessorGeneric(comptime SourceType: type, comptime VecT: type, comptime unchecked: bool) type {
+/// When a margin is provided, safe builds assert that every getAt offset
+/// stays within it (the declared margin sizes the unchecked interior, so
+/// out-of-margin reads are undefined behavior in unsafe builds).
+pub fn InputAccessorGeneric(comptime SourceType: type, comptime VecT: type, comptime unchecked: bool, comptime margin: ?Margin) type {
     const SourceInfo = sources.SourceTraits(SourceType);
     const ReturnType = if (SourceInfo.has_output_type) SourceType.OutputType else VecT;
 
@@ -161,8 +206,13 @@ pub fn InputAccessorGeneric(comptime SourceType: type, comptime VecT: type, comp
 
         const Self = @This();
 
-        /// Get value at offset (for margin-based operations)
+        /// Get value at offset (for margin-based operations).
+        /// The offset must stay within the loop's declared margin.
         pub inline fn getAt(self: Self, dx: i32, dy: i32) ReturnType {
+            if (margin) |m| {
+                std.debug.assert(dx >= -@as(i32, @intCast(m.left)) and dx <= @as(i32, @intCast(m.right)));
+                std.debug.assert(dy >= -@as(i32, @intCast(m.top)) and dy <= @as(i32, @intCast(m.bottom)));
+            }
             const x = self.current_x + dx;
             const y = self.current_y + dy;
 
@@ -186,13 +236,15 @@ pub fn InputAccessorGeneric(comptime SourceType: type, comptime VecT: type, comp
 }
 
 /// Standard input accessor with bounds checking (default).
+/// No margin contract is enforced; reads outside the region fall back to the
+/// source's padding policy.
 pub fn InputAccessor(comptime SourceType: type, comptime VecT: type) type {
-    return InputAccessorGeneric(SourceType, VecT, false);
+    return InputAccessorGeneric(SourceType, VecT, false, null);
 }
 
 /// Unchecked input accessor that skips bounds checking (for interior fast path).
 pub fn UncheckedInputAccessor(comptime SourceType: type, comptime VecT: type) type {
-    return InputAccessorGeneric(SourceType, VecT, true);
+    return InputAccessorGeneric(SourceType, VecT, true, null);
 }
 
 // ============================================================================
@@ -218,7 +270,7 @@ pub fn LoopResult(
     else if (comptime is_group_source)
         group.GroupAccessor(SourceType, VecT, SourceType.group_width, SourceType.group_height)
     else
-        InputAccessor(SourceType, VecT);
+        InputAccessorGeneric(SourceType, VecT, false, opts.margin);
 
     // Unchecked accessor for interior fast path (only for simple sources, not zip/group)
     const UncheckedAccessorType = if (comptime is_zip_source)
@@ -226,9 +278,13 @@ pub fn LoopResult(
     else if (comptime is_group_source)
         group.GroupAccessor(SourceType, VecT, SourceType.group_width, SourceType.group_height)
     else
-        UncheckedInputAccessor(SourceType, VecT);
+        InputAccessorGeneric(SourceType, VecT, true, opts.margin);
 
     const vec_len = @typeInfo(VecT).vector.len;
+
+    // A chained source must produce vectors with the same lane count as VecT,
+    // otherwise process() would advance positions by the wrong step.
+    comptime assertSourceVectorLength(VecT, SourceType);
 
     // Get the actual return type from the process function
     const ReturnType = ProcessReturnType(process_fn);

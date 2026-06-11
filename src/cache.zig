@@ -8,7 +8,8 @@ const zip = @import("zip.zig");
 const sources = @import("sources.zig");
 const Region = @import("region.zig").Region;
 const LoopOptions = @import("loop.zig").LoopOptions;
-const InputAccessor = @import("loop.zig").InputAccessor;
+const InputAccessorGeneric = @import("loop.zig").InputAccessorGeneric;
+const assertSourceVectorLength = @import("loop.zig").assertSourceVectorLength;
 const splatCoordScalar = @import("loop.zig").splatCoordScalar;
 
 /// Row cache for intermediate results in expression trees.
@@ -142,6 +143,10 @@ fn CachedLoopState(
     const ElemT = @typeInfo(VecT).vector.child;
     const Cache = RowCache(ElemT, max_cache_rows);
 
+    // A chained source must produce vectors with the same lane count as VecT,
+    // otherwise the cached rows would be filled with the wrong step.
+    comptime assertSourceVectorLength(VecT, SrcType);
+
     return struct {
         source: SrcType,
         context: CtxType,
@@ -154,7 +159,7 @@ fn CachedLoopState(
         const AccessorType = if (zip.isZipSourceType(SrcType))
             zip.ZipAccessor(SrcType, VecT)
         else
-            InputAccessor(SrcType, VecT);
+            InputAccessorGeneric(SrcType, VecT, false, opts.margin);
 
         /// Ensure rows needed for position (x, y) are computed and cached.
         fn ensureRowsCached(self: *Self, y: i32) void {

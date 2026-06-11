@@ -13,17 +13,15 @@ const stats_mod = @import("stats.zig");
 const translate_mod = @import("translate.zig");
 const zip_mod = @import("zip.zig");
 
-fn SuggestedVector(comptime T: type) type {
-    return @Vector(std.simd.suggestVectorLength(T) orelse 1, T);
-}
-
 /// Platform-suggested SIMD lane count for 8bit image workloads.
 pub const suggested_vec_len = std.simd.suggestVectorLength(u8) orelse 1;
-/// Convenience SIMD aliases using the platform-suggested lane count.
-pub const f32v = SuggestedVector(f32);
-pub const i32v = SuggestedVector(i32);
-pub const u16v = SuggestedVector(u16);
-pub const u8v = SuggestedVector(u8);
+/// Convenience SIMD aliases. They all share the same lane count
+/// (`suggested_vec_len`) so they can be mixed freely within one pipeline;
+/// `loop` requires every stage of an expression tree to agree on lane count.
+pub const f32v = @Vector(suggested_vec_len, f32);
+pub const i32v = @Vector(suggested_vec_len, i32);
+pub const u16v = @Vector(suggested_vec_len, u16);
+pub const u8v = @Vector(suggested_vec_len, u8);
 
 /// Reuse a vector type's lane count with a different scalar type.
 pub fn VectorLike(comptime VectorType: type, comptime ScalarType: type) type {

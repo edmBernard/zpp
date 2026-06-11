@@ -62,7 +62,7 @@ const std = @import("std");
 const zpp = @import("zpp");
 
 const u8v = zpp.u8v;
-const f32v = zpp.VectorLike(u8v, f32);
+const f32v = zpp.f32v; // all zpp vector aliases share the same lane count
 
 pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
@@ -142,6 +142,10 @@ const margin = zpp.Margin.uniform(1);     // 1 pixel in all directions (3x3 kern
 const h_margin = zpp.Margin.horizontal(2); // 2 pixels horizontally only
 const v_margin = zpp.Margin.vertical(1);   // 1 pixel vertically only
 ```
+
+The declared margin is a contract: a kernel may only call `in.getAt(dx, dy)` with offsets inside it (`dx` in `[-left, right]`, `dy` in `[-top, bottom]`).
+The interior fast path uses unchecked reads sized from this declaration, so reading outside the declared margin is undefined behavior in unsafe builds.
+Safe builds catch violations with an assertion.
 
 ### Sources and Destinations
 
