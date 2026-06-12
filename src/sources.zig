@@ -278,7 +278,7 @@ fn validatePackedLayout(data_len: usize, stride: u32, region: Region) !void {
     if (required_len > data_len) return error.BufferTooSmall;
 }
 
-fn validateInterleavedLayout(comptime num_channels: comptime_int, data_len: usize, width: u32, region: Region) !void {
+fn validateInterleavedLayout(comptime num_channels: comptime_int, data_len: usize, stride: u32, region: Region) !void {
     if (num_channels <= 0) {
         @compileError("Interleaved destinations must use at least one channel");
     }
@@ -286,10 +286,10 @@ fn validateInterleavedLayout(comptime num_channels: comptime_int, data_len: usiz
     if (region.x < 0 or region.y < 0) return error.NegativeRegionOrigin;
 
     const stop_x = @as(u64, @intCast(region.x)) + region.width;
-    if (stop_x > width) return error.StrideTooSmall;
+    if (stop_x > stride) return error.StrideTooSmall;
 
     const stop_y = @as(u64, @intCast(region.y)) + region.height;
-    const pixels_needed = (stop_y - 1) * @as(u64, width) + stop_x;
+    const pixels_needed = (stop_y - 1) * @as(u64, stride) + stop_x;
     const required_len = pixels_needed * @as(u64, @intCast(num_channels));
     if (required_len > data_len) return error.BufferTooSmall;
 }
@@ -467,7 +467,14 @@ pub fn makeDest(comptime T: type, data: []T, stride: u32, region: Region) !Outpu
 pub fn InterleavedOutput(comptime T: type, comptime num_channels: comptime_int) type {
     return struct {
         data: []T,
-        width: u32,
+        /// Row pitch in pixels (not elements); element stride is `stride * num_channels`.
+        /// May exceed `region.width` when processing a sub-region of a larger buffer.
+        ///
+        /// Limitation: the row pitch in elements is always a multiple of `num_channels`,
+        /// so buffers whose rows are padded to an alignment that is not a multiple of
+        /// the pixel size (e.g. RGB u8 rows padded to 4-byte boundaries) cannot be
+        /// wrapped by this type.
+        stride: u32,
         region: Region,
 
         pub const InputScalarType = T;
@@ -501,14 +508,14 @@ pub fn InterleavedOutput(comptime T: type, comptime num_channels: comptime_int) 
             const interlaced = std.simd.interlace(values);
 
             // Write to output buffer
-            const offset = y * self.width * num_channels + x * num_channels;
+            const offset = y * self.stride * num_channels + x * num_channels;
             const dest = self.data[offset..][0 .. vec_len * num_channels];
             dest.* = interlaced;
         }
 
         /// Write a single multi-channel pixel (for remainder handling)
         pub fn writeScalar(self: Self, x: u32, y: u32, values: anytype) void {
-            const offset = y * self.width * num_channels + x * num_channels;
+            const offset = y * self.stride * num_channels + x * num_channels;
             inline for (0..num_channels) |c| {
                 self.data[offset + c] = values[c];
             }
@@ -516,18 +523,23 @@ pub fn InterleavedOutput(comptime T: type, comptime num_channels: comptime_int) 
     };
 }
 
-/// Create an interleaved multi-channel output destination
+/// Create an interleaved multi-channel output destination.
+/// `stride` is the row pitch in pixels (not elements); it may exceed
+/// `region.width` to process a sub-region of a larger buffer.
+/// Note: this means the row pitch in elements is always `stride * num_channels`;
+/// buffers with row padding that is not a multiple of the pixel size cannot be
+/// expressed (see the limitation note on `InterleavedOutput.stride`).
 pub fn makeInterleavedDest(
     comptime T: type,
     comptime num_channels: comptime_int,
     data: []T,
-    width: u32,
+    stride: u32,
     region: Region,
 ) !InterleavedOutput(T, num_channels) {
-    try validateInterleavedLayout(num_channels, data.len, width, region);
+    try validateInterleavedLayout(num_channels, data.len, stride, region);
     return .{
         .data = data,
-        .width = width,
+        .stride = stride,
         .region = region,
     };
 }
