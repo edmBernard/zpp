@@ -26,19 +26,6 @@ pub fn hasSourceTag(comptime T: type, comptime tag: SourceTag) bool {
     return false;
 }
 
-/// Tag to identify composite destination types.
-pub const DestTag = enum {
-    zip,
-};
-
-/// Check if a type has a specific destination tag.
-pub fn hasDestTag(comptime T: type, comptime tag: DestTag) bool {
-    if (@hasDecl(T, "dest_tag")) {
-        return T.dest_tag == tag;
-    }
-    return false;
-}
-
 // ============================================================================
 // MARK: Traits
 // ============================================================================
@@ -46,6 +33,15 @@ pub fn hasDestTag(comptime T: type, comptime tag: DestTag) bool {
 pub const SourceAccessKind = enum {
     eval,
     read,
+};
+
+/// Whether an accessor may skip bounds checking.
+/// `.unchecked` is only valid on the interior fast path, where the caller
+/// guarantees every covered position is in-bounds; sources without an
+/// unchecked entry point fall back to checked reads.
+pub const BoundsCheck = enum {
+    checked,
+    unchecked,
 };
 
 fn sourceContractError(comptime T: type, comptime detail: []const u8) noreturn {
@@ -319,16 +315,13 @@ pub fn InputSource(comptime T: type, comptime PaddingPolicy: type) type {
 
         /// Read a value at the given position, applying padding policy for out-of-bounds.
         pub fn read(self: Self, x: i32, y: i32) T {
-            // Check if within valid region
+            // In-region reads are always in-buffer: makeSource validates the layout.
             if (x >= self.region.x and x < self.region.stopX() and
                 y >= self.region.y and y < self.region.stopY())
             {
                 const ux: u32 = @intCast(x);
                 const uy: u32 = @intCast(y);
-                const idx = uy * self.stride + ux;
-                if (idx < self.data.len) {
-                    return self.data[idx];
-                }
+                return self.data[uy * self.stride + ux];
             }
             // Apply padding policy for out-of-bounds access
             return PaddingPolicy.apply(T, self.data, self.stride, x, y, self.region);

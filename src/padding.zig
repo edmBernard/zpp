@@ -1,5 +1,6 @@
 //! Padding policies and loop options for pixel processing.
 
+const std = @import("std");
 const Region = @import("region.zig").Region;
 
 // ============================================================================
@@ -47,10 +48,10 @@ pub const RepeatEdgePadding = struct {
         const uy: u32 = @intCast(clamped_y);
         const idx = uy * stride + ux;
 
-        if (idx < data.len) {
-            return data[idx];
-        }
-        return 0;
+        // Source constructors validate that the buffer covers the region, so a
+        // clamped in-region index can never fall outside the buffer.
+        std.debug.assert(idx < data.len);
+        return data[idx];
     }
 
     /// Clamp X coordinates to valid region bounds (vector operation).

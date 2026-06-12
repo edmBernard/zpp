@@ -430,3 +430,115 @@ test "Group: loop accessor preserves grouped integer vectors" {
 
     try std.testing.expectEqual([4]u16{ 14, 22, 46, 54 }, output);
 }
+
+// MARK: Group: SIMD-path lane semantics
+// These tests use images wider than the lane count so process() exercises the
+// full-vector paths, not only the scalar remainder fallback.
+
+test "Group: over a loop result preserves group lane semantics" {
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 8, .height = 2 };
+
+    var input: [16]f32 = undefined;
+    for (&input, 0..) |*v, i| v.* = @floatFromInt(i + 1);
+    // Row 0: 1..8, Row 1: 9..16
+
+    const source = try zpp.makeSource(f32, &input, region.width, region);
+
+    // Identity kernel so the nested source becomes eval-kind (LoopResult)
+    const identity = struct {
+        fn process(ctx: @TypeOf(.{}), in: anytype) f32x4 {
+            _ = ctx;
+            return in.get();
+        }
+    };
+    const identity_loop = zpp.loop(f32x4, .{}, source, .{}, identity.process);
+
+    const grouped = zpp.group(2, 2, identity_loop);
+
+    var out_a: [4]f32 = @splat(0);
+    var out_b: [4]f32 = @splat(0);
+    var out_c: [4]f32 = @splat(0);
+    var out_d: [4]f32 = @splat(0);
+
+    zpp.process(grouped, zpp.zipDest(.{
+        try zpp.makeDest(f32, &out_a, grouped.region.width, grouped.region),
+        try zpp.makeDest(f32, &out_b, grouped.region.width, grouped.region),
+        try zpp.makeDest(f32, &out_c, grouped.region.width, grouped.region),
+        try zpp.makeDest(f32, &out_d, grouped.region.width, grouped.region),
+    }));
+
+    // Lane i of each channel is that channel of group i.
+    try std.testing.expectEqual([4]f32{ 1, 3, 5, 7 }, out_a);
+    try std.testing.expectEqual([4]f32{ 2, 4, 6, 8 }, out_b);
+    try std.testing.expectEqual([4]f32{ 9, 11, 13, 15 }, out_c);
+    try std.testing.expectEqual([4]f32{ 10, 12, 14, 16 }, out_d);
+}
+
+test "Group destination: depth to space on the SIMD vector path" {
+    const gw = 32; // grouped width
+    const in_region: zpp.Region = .{ .x = 0, .y = 0, .width = gw, .height = 1 };
+    const out_region: zpp.Region = .{ .x = 0, .y = 0, .width = gw * 2, .height = 2 };
+
+    var input_a: [gw]f32 = undefined;
+    var input_b: [gw]f32 = undefined;
+    var input_c: [gw]f32 = undefined;
+    var input_d: [gw]f32 = undefined;
+    for (0..gw) |i| {
+        input_a[i] = @floatFromInt(1000 + i);
+        input_b[i] = @floatFromInt(2000 + i);
+        input_c[i] = @floatFromInt(3000 + i);
+        input_d[i] = @floatFromInt(4000 + i);
+    }
+    var output = [_]f32{0} ** (gw * 2 * 2);
+
+    const sa = try zpp.makeSource(f32, &input_a, gw, in_region);
+    const sb = try zpp.makeSource(f32, &input_b, gw, in_region);
+    const sc = try zpp.makeSource(f32, &input_c, gw, in_region);
+    const sd = try zpp.makeSource(f32, &input_d, gw, in_region);
+    const dest = try zpp.makeDest(f32, &output, out_region.width, out_region);
+
+    zpp.process(zpp.zip(.{ sa, sb, sc, sd }), zpp.groupDest(2, 2, dest));
+
+    // Group g occupies output pixels (2g, 0), (2g+1, 0), (2g, 1), (2g+1, 1)
+    for (0..gw) |g| {
+        try std.testing.expectEqual(input_a[g], output[2 * g]);
+        try std.testing.expectEqual(input_b[g], output[2 * g + 1]);
+        try std.testing.expectEqual(input_c[g], output[gw * 2 + 2 * g]);
+        try std.testing.expectEqual(input_d[g], output[gw * 2 + 2 * g + 1]);
+    }
+}
+
+test "Group: direct space-to-depth on the SIMD vector path" {
+    const width = 64;
+    const height = 4;
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = width, .height = height };
+
+    var input: [width * height]f32 = undefined;
+    for (&input, 0..) |*v, i| v.* = @floatFromInt(i);
+
+    var out_a = [_]f32{0} ** (width * height / 4);
+    var out_b = [_]f32{0} ** (width * height / 4);
+    var out_c = [_]f32{0} ** (width * height / 4);
+    var out_d = [_]f32{0} ** (width * height / 4);
+
+    const source = try zpp.makeSource(f32, &input, width, region);
+    const grouped = zpp.group(2, 2, source);
+    const gr = grouped.region;
+
+    zpp.process(grouped, zpp.zipDest(.{
+        try zpp.makeDest(f32, &out_a, gr.width, gr),
+        try zpp.makeDest(f32, &out_b, gr.width, gr),
+        try zpp.makeDest(f32, &out_c, gr.width, gr),
+        try zpp.makeDest(f32, &out_d, gr.width, gr),
+    }));
+
+    for (0..gr.height) |gy| {
+        for (0..gr.width) |gx| {
+            const idx = gy * gr.width + gx;
+            try std.testing.expectEqual(input[(2 * gy) * width + 2 * gx], out_a[idx]);
+            try std.testing.expectEqual(input[(2 * gy) * width + 2 * gx + 1], out_b[idx]);
+            try std.testing.expectEqual(input[(2 * gy + 1) * width + 2 * gx], out_c[idx]);
+            try std.testing.expectEqual(input[(2 * gy + 1) * width + 2 * gx + 1], out_d[idx]);
+        }
+    }
+}

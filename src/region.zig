@@ -216,6 +216,9 @@ pub const Region = struct {
 };
 
 /// Ceiling division for signed integers.
+/// Not std.math.divCeil: that returns an error union (to report division by
+/// zero and overflow), which would needlessly push error handling into
+/// infallible Region arithmetic.
 fn divCeil(a: i32, b: i32) i32 {
     return -@divFloor(-a, b);
 }

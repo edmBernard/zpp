@@ -88,11 +88,6 @@ pub fn isZipSourceType(comptime T: type) bool {
     return sources.hasSourceTag(T, .zip);
 }
 
-/// Check if a type is a ZipDest
-pub fn isZipDestType(comptime T: type) bool {
-    return sources.hasDestTag(T, .zip);
-}
-
 // ============================================================================
 // MARK: Helper: Get Vector Length from Source
 // ============================================================================
@@ -187,6 +182,52 @@ pub fn ZipSource(comptime source_count: comptime_int, comptime SourceTypes: [sou
 
             return result;
         }
+
+        /// Evaluate at a specific position using unchecked reads for every
+        /// nested source that supports them (the rest stay checked).
+        /// Caller MUST guarantee (x, y) lies inside getInteriorRegion().
+        pub inline fn evalAtUnchecked(self: Self, x: i32, y: i32) ResultTuple {
+            var result: ResultTuple = undefined;
+
+            inline for (0..source_count) |i| {
+                result[i] = if (comptime sources.SourceTraits(SourceTypes[i]).has_unchecked)
+                    sources.evalSourceUnchecked(SourceTypes[i], self.sources[i], vec_len, x, y)
+                else
+                    sources.evalSourceChecked(SourceTypes[i], self.sources[i], vec_len, x, y);
+            }
+
+            return result;
+        }
+
+        /// Returns the region where evalAtUnchecked is safe for every nested
+        /// source: the intersection of the nested interiors. Sources without
+        /// an unchecked path stay checked and add no constraint.
+        pub fn getInteriorRegion(self: Self) Region {
+            var interior: ?Region = null;
+            inline for (0..source_count) |i| {
+                const Traits = sources.SourceTraits(SourceTypes[i]);
+                const src_interior: ?Region = blk: {
+                    if (comptime Traits.has_interior_region) {
+                        break :blk self.sources[i].getInteriorRegion();
+                    }
+                    if (comptime !Traits.has_unchecked) {
+                        break :blk null;
+                    }
+                    if (comptime Traits.kind == .read and Traits.has_region) {
+                        // Leaf data source: a vector read at x covers
+                        // columns x .. x + vec_len - 1.
+                        break :blk self.sources[i].region.deflated(0, 0, vec_len - 1, 0);
+                    }
+                    // Unchecked-capable source without interior information:
+                    // disable the fast path entirely.
+                    break :blk Region{ .width = 0, .height = 0 };
+                };
+                if (src_interior) |si| {
+                    interior = if (interior) |acc| acc.intersection(si) else si;
+                }
+            }
+            return interior orelse .{ .width = 0, .height = 0 };
+        }
     };
 }
 
@@ -227,7 +268,6 @@ pub fn ZipDest(comptime dest_count: comptime_int, comptime DestTypes: [dest_coun
         dests: SourceTuple(&DestTypes),
         region: Region,
 
-        pub const dest_tag = sources.DestTag.zip;
         pub const count = dest_count;
         const Self = @This();
 
@@ -342,11 +382,13 @@ pub fn unzip(zipped: anytype) UnzipResultType(@TypeOf(zipped)) {
 
 /// Zip accessor for kernel functions - provides access to zipped pixel values.
 /// Returns tuples that can be unpacked: `const [a, b] = in.get();`
-pub fn ZipAccessor(comptime SrcType: type, comptime VecT: type) type {
+/// With `.unchecked` bounds, nested reads skip bounds checking where the
+/// nested source supports it (interior fast path).
+pub fn ZipAccessor(comptime SrcType: type, comptime VecT: type, comptime bounds: sources.BoundsCheck) type {
     const source_count = SrcType.count;
     const SourceTypes = @typeInfo(SrcType.Sources).@"struct".fields;
     const ResultTuple = SourceValueTupleType(sourceTypesFromTuple(SrcType.Sources), @typeInfo(VecT).vector.len);
-    const InputAccessor = @import("loop.zig").InputAccessor;
+    const InputAccessorGeneric = @import("loop.zig").InputAccessorGeneric;
 
     return struct {
         source: SrcType,
@@ -363,7 +405,7 @@ pub fn ZipAccessor(comptime SrcType: type, comptime VecT: type) type {
             var result: ResultTuple = undefined;
             inline for (0..source_count) |i| {
                 const SourceT = SourceTypes[i].type;
-                const Accessor = InputAccessor(SourceT, AccessorVecType(SourceT, VecT));
+                const Accessor = InputAccessorGeneric(SourceT, AccessorVecType(SourceT, VecT), bounds, null);
                 const accessor = Accessor{
                     .source = self.source.sources[i],
                     .current_x = self.current_x,

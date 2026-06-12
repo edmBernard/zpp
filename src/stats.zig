@@ -15,11 +15,17 @@ const Region = @import("region.zig").Region;
 /// statistics into a context structure. Full SIMD batches arrive through `write()`.
 /// Checked remainders arrive through `writeScalar()`, where only lane 0 is populated
 /// and the remaining lanes are zero.
+/// Whether the accumulate function also receives coordinate vectors.
+pub const CoordMode = enum {
+    values_only,
+    with_coords,
+};
+
 pub fn StatsDest(
     comptime VecT: type,
     comptime ContextType: type,
     comptime accumulate_fn: anytype,
-    comptime has_coords: bool,
+    comptime coords: CoordMode,
 ) type {
     const vec_len = @typeInfo(VecT).vector.len;
 
@@ -39,7 +45,7 @@ pub fn StatsDest(
         /// Calls the user's stats kernel on a simd batch.
         /// The incoming (x, y) are already absolute image coordinates.
         pub fn write(self: Self, x: u32, y: u32, values: VecT) void {
-            if (has_coords) {
+            if (coords == .with_coords) {
                 const iota = std.simd.iota(i32, vec_len);
                 const xi: i32 = @intCast(x);
                 const yi: i32 = @intCast(y);
@@ -56,7 +62,7 @@ pub fn StatsDest(
         pub fn writeScalar(self: Self, x: u32, y: u32, value: InputScalarType) void {
             const single = scalarBatch(value);
 
-            if (has_coords) {
+            if (coords == .with_coords) {
                 const xi: i32 = @intCast(x);
                 const yi: i32 = @intCast(y);
                 const x_vec: @Vector(vec_len, i32) = @splat(xi);
@@ -92,7 +98,7 @@ pub fn stats(
     context: anytype,
     region: Region,
     comptime stats_fn: anytype,
-) StatsDest(VecT, @typeInfo(@TypeOf(context)).pointer.child, stats_fn, false) {
+) StatsDest(VecT, @typeInfo(@TypeOf(context)).pointer.child, stats_fn, .values_only) {
     return .{
         .context = context,
         .region = region,
@@ -106,7 +112,7 @@ pub fn statsWithCoords(
     context: anytype,
     region: Region,
     comptime stats_fn: anytype,
-) StatsDest(VecT, @typeInfo(@TypeOf(context)).pointer.child, stats_fn, true) {
+) StatsDest(VecT, @typeInfo(@TypeOf(context)).pointer.child, stats_fn, .with_coords) {
     return .{
         .context = context,
         .region = region,

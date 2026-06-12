@@ -243,3 +243,40 @@ test "InterpLoop Linear: zero padding zeroes out-of-bounds samples" {
     };
     try std.testing.expectEqual(expected_data, output_data);
 }
+
+// MARK: InterpLoop: translated sources keep the vectorized clamp gather
+test "InterpLoop Linear: identity transform through a translated source" {
+    const width = 8;
+    const height = 2;
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = width, .height = height };
+
+    var input: [width * height]f32 = undefined;
+    for (&input, 0..) |*v, i| v.* = @floatFromInt(i + 1);
+
+    const source = try zpp.makeSource(f32, &input, width, region);
+    const translated = zpp.translate(source, 3, 1);
+
+    // Output region follows the translated source; identity sampling must
+    // reproduce the original pixels at the shifted positions.
+    const out_region = translated.region;
+    const stride: u32 = width + 3; // covers the shifted region's stopX
+    var output = [_]f32{0} ** (stride * 3);
+    const destination = try zpp.makeDest(f32, &output, stride, out_region);
+
+    const kernel = struct {
+        fn process(ctx: @TypeOf(.{}), interp: anytype, x: f32x4, y: f32x4) f32x4 {
+            _ = ctx;
+            return interp.sample(x, y);
+        }
+    };
+
+    const result = zpp.interpLoop(f32x4, .linear, translated, out_region, .{}, kernel.process);
+    zpp.process(result, destination);
+
+    for (0..height) |y| {
+        for (0..width) |x| {
+            const out_idx = (y + 1) * stride + (x + 3);
+            try std.testing.expectEqual(input[y * width + x], output[out_idx]);
+        }
+    }
+}

@@ -429,3 +429,49 @@ test "Zip: unzip preserves region dimensions" {
     try std.testing.expectEqual(zipped_region.width, unzipped_1_region.width);
     try std.testing.expectEqual(zipped_region.height, unzipped_1_region.height);
 }
+
+// MARK: Zip: interior fast path
+test "Zip: margined loop over wide sources matches scalar reference" {
+    // Wide enough that the interior unchecked fast path is taken; the result
+    // must be identical to a scalar reference using repeat-edge clamping.
+    const width = 64;
+    const height = 3;
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = width, .height = height };
+
+    var input_a: [width * height]f32 = undefined;
+    var input_b: [width * height]f32 = undefined;
+    for (0..width * height) |i| {
+        input_a[i] = @floatFromInt(i);
+        input_b[i] = @floatFromInt(10000 + i);
+    }
+    var output = [_]f32{0} ** (width * height);
+
+    const source_a = try zpp.makeSource(f32, &input_a, width, region);
+    const source_b = try zpp.makeSource(f32, &input_b, width, region);
+    const destination = try zpp.makeDest(f32, &output, width, region);
+
+    const zipped = zpp.zip(.{ source_a, source_b });
+
+    // out(x) = a(x-1) + a(x+1) + b(x)
+    const kernel = struct {
+        fn process(ctx: @TypeOf(.{}), in: anytype) f32x4 {
+            _ = ctx;
+            const left = in.getAt(-1, 0);
+            const right = in.getAt(1, 0);
+            const center = in.get();
+            return left[0] + right[0] + center[1];
+        }
+    };
+
+    const result = zpp.loop(f32x4, .{ .margin = zpp.Margin.horizontal(1) }, zipped, .{}, kernel.process);
+    zpp.process(result, destination);
+
+    for (0..height) |y| {
+        for (0..width) |x| {
+            const xl = if (x == 0) 0 else x - 1;
+            const xr = @min(x + 1, width - 1);
+            const expected = input_a[y * width + xl] + input_a[y * width + xr] + input_b[y * width + x];
+            try std.testing.expectEqual(expected, output[y * width + x]);
+        }
+    }
+}

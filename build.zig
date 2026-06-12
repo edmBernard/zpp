@@ -14,11 +14,13 @@ pub fn build(b: *std.Build) void {
     const zla_mod = b.addModule("zla", .{
         .root_source_file = b.path("src/zla/root.zig"),
         .target = target,
+        .optimize = optimize,
     });
 
     const zpp_mod = b.addModule("zpp", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
+        .optimize = optimize,
         .imports = &.{
             .{ .name = "zla", .module = zla_mod },
         },

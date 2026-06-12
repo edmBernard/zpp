@@ -34,11 +34,12 @@ pub fn PixelInterpolator(comptime SourceType: type, comptime VecT: type, comptim
     const IndexVecT = @Vector(vec_len, i32);
     const Traits = sources.SourceTraits(SourceType);
 
-    // Sources that expose their padding policy (InputSource) support a
-    // branch-free gather: clamp the coordinates with vector min/max, read
-    // unchecked, and mask lanes to zero if the policy requires it.
+    // Sources that expose their padding policy (InputSource and wrappers such
+    // as translate) support a branch-free gather: clamp the coordinates with
+    // vector min/max, read unchecked, and mask lanes to zero if the policy
+    // requires it. `void` marks a wrapper whose nested source has no policy.
     const has_clamp_gather = Traits.kind == .read and Traits.has_unchecked and
-        @hasDecl(SourceType, "PaddingPolicyType");
+        @hasDecl(SourceType, "PaddingPolicyType") and SourceType.PaddingPolicyType != void;
 
     return struct {
         source: SourceType,

@@ -1,7 +1,7 @@
 //! Core processing loop primitives for ZPP.
 //!
 //! This module provides the fundamental building blocks for pixel processing:
-//! - InputAccessor: provides neighborhood access for kernels
+//! - InputAccessorGeneric: provides neighborhood access for kernels
 //! - LoopResult: lazy evaluation of processing operations
 //! - GeneratorResult: generates values from coordinates
 //! - Loop, Generate, Process: main API functions
@@ -43,28 +43,6 @@ pub fn isZipSourceType(comptime T: type) bool {
 /// Helper to detect if a type is a GroupSource
 pub fn isGroupSourceType(comptime T: type) bool {
     return group.isGroupSourceType(T);
-}
-
-/// Get the vector length from either a vector type, array of vectors, or tuple of vectors
-pub fn vectorLen(comptime T: type) comptime_int {
-    const type_info = @typeInfo(T);
-    if (type_info == .vector) {
-        return type_info.vector.len;
-    } else if (type_info == .array) {
-        const child_info = @typeInfo(type_info.array.child);
-        if (child_info == .vector) {
-            return child_info.vector.len;
-        }
-    } else if (type_info == .@"struct" and type_info.@"struct".is_tuple) {
-        if (type_info.@"struct".fields.len > 0) {
-            const first_field_type = type_info.@"struct".fields[0].type;
-            const first_info = @typeInfo(first_field_type);
-            if (first_info == .vector) {
-                return first_info.vector.len;
-            }
-        }
-    }
-    @compileError("Expected vector, array of vectors, or tuple of vectors, got " ++ @typeName(T));
 }
 
 /// Get the return type of a process function
@@ -191,11 +169,11 @@ pub fn generate(
 
 /// Input accessor that provides neighborhood access for kernels.
 /// Supports configurable vector length and uses the source's padding policy.
-/// When unchecked=true, skips bounds checking for the interior fast path.
+/// With `.unchecked` bounds, skips bounds checking for the interior fast path.
 /// When a margin is provided, safe builds assert that every getAt offset
 /// stays within it (the declared margin sizes the unchecked interior, so
 /// out-of-margin reads are undefined behavior in unsafe builds).
-pub fn InputAccessorGeneric(comptime SourceType: type, comptime VecT: type, comptime unchecked: bool, comptime margin: ?Margin) type {
+pub fn InputAccessorGeneric(comptime SourceType: type, comptime VecT: type, comptime bounds: sources.BoundsCheck, comptime margin: ?Margin) type {
     const SourceInfo = sources.SourceTraits(SourceType);
     const ReturnType = if (SourceInfo.has_output_type) SourceType.OutputType else VecT;
 
@@ -217,11 +195,11 @@ pub fn InputAccessorGeneric(comptime SourceType: type, comptime VecT: type, comp
             const y = self.current_y + dy;
 
             return switch (comptime SourceInfo.kind) {
-                .eval => if (comptime unchecked and SourceInfo.unchecked_kind == .eval)
+                .eval => if (comptime bounds == .unchecked and SourceInfo.unchecked_kind == .eval)
                     self.source.evalAtUnchecked(x, y)
                 else
                     self.source.evalAt(x, y),
-                .read => if (comptime unchecked and SourceInfo.unchecked_kind == .read)
+                .read => if (comptime bounds == .unchecked and SourceInfo.unchecked_kind == .read)
                     self.source.readVecUnchecked(VecT, x, y)
                 else
                     self.source.readVec(VecT, x, y),
@@ -233,18 +211,6 @@ pub fn InputAccessorGeneric(comptime SourceType: type, comptime VecT: type, comp
             return self.getAt(0, 0);
         }
     };
-}
-
-/// Standard input accessor with bounds checking (default).
-/// No margin contract is enforced; reads outside the region fall back to the
-/// source's padding policy.
-pub fn InputAccessor(comptime SourceType: type, comptime VecT: type) type {
-    return InputAccessorGeneric(SourceType, VecT, false, null);
-}
-
-/// Unchecked input accessor that skips bounds checking (for interior fast path).
-pub fn UncheckedInputAccessor(comptime SourceType: type, comptime VecT: type) type {
-    return InputAccessorGeneric(SourceType, VecT, true, null);
 }
 
 // ============================================================================
@@ -266,19 +232,19 @@ pub fn LoopResult(
 
     // VecT is the base vector type for the accessor
     const AccessorType = if (comptime is_zip_source)
-        zip.ZipAccessor(SourceType, VecT)
+        zip.ZipAccessor(SourceType, VecT, .checked)
     else if (comptime is_group_source)
-        group.GroupAccessor(SourceType, VecT, SourceType.group_width, SourceType.group_height)
+        group.GroupAccessor(SourceType, VecT, SourceType.group_width, SourceType.group_height, .checked)
     else
-        InputAccessorGeneric(SourceType, VecT, false, opts.margin);
+        InputAccessorGeneric(SourceType, VecT, .checked, opts.margin);
 
-    // Unchecked accessor for interior fast path (only for simple sources, not zip/group)
+    // Unchecked accessor for interior fast path
     const UncheckedAccessorType = if (comptime is_zip_source)
-        zip.ZipAccessor(SourceType, VecT)
+        zip.ZipAccessor(SourceType, VecT, .unchecked)
     else if (comptime is_group_source)
-        group.GroupAccessor(SourceType, VecT, SourceType.group_width, SourceType.group_height)
+        group.GroupAccessor(SourceType, VecT, SourceType.group_width, SourceType.group_height, .unchecked)
     else
-        InputAccessorGeneric(SourceType, VecT, true, opts.margin);
+        InputAccessorGeneric(SourceType, VecT, .unchecked, opts.margin);
 
     const vec_len = @typeInfo(VecT).vector.len;
 
@@ -296,9 +262,6 @@ pub fn LoopResult(
         source: SourceType,
         context: ContextType,
         region: Region,
-
-        // Marker to identify this as a LoopResult for expression trees
-        const source_type = SourceType;
 
         /// The output type of evalAt (may be VecT, [N]VecT, or tuple)
         pub const OutputType = ReturnType;
@@ -360,18 +323,25 @@ pub fn LoopResult(
                 return .{ .width = 0, .height = 0 };
             }
 
-            // If the source is a chained LoopResult with its own interior region,
-            // use that as the base. It already accounts for vec_len and deeper margins.
-            // We only need to deflate by our own kernel's margin offsets.
+            // If the source is a chained source with its own interior region,
+            // use that as the base. It already accounts for its own lane count
+            // and deeper margins. We only need to deflate by our own kernel's
+            // margin offsets.
             if (comptime SourceInfo.has_interior_region) {
                 const src_interior = self.source.getInteriorRegion();
                 if (src_interior.width == 0 or src_interior.height == 0) {
                     return .{ .width = 0, .height = 0 };
                 }
+                // Zip/group sources compute their interior for their own lane
+                // count, but their accessors re-read nested sources at this
+                // loop's lane count. When this loop reads wider vectors,
+                // deflate the right edge by the difference.
+                const src_vec_len = comptime getSourceVecLen(SourceType) orelse vec_len;
+                const extra_right: i32 = comptime @max(0, vec_len - src_vec_len);
                 return src_interior.deflated(
                     @intCast(opts.margin.left),
                     @intCast(opts.margin.top),
-                    @intCast(opts.margin.right),
+                    @as(i32, @intCast(opts.margin.right)) + extra_right,
                     @intCast(opts.margin.bottom),
                 );
             }

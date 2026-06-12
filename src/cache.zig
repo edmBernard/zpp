@@ -157,9 +157,9 @@ fn CachedLoopState(
         const Self = @This();
         const has_coords = opts.coord_type != null;
         const AccessorType = if (zip.isZipSourceType(SrcType))
-            zip.ZipAccessor(SrcType, VecT)
+            zip.ZipAccessor(SrcType, VecT, .checked)
         else
-            InputAccessorGeneric(SrcType, VecT, false, opts.margin);
+            InputAccessorGeneric(SrcType, VecT, .checked, opts.margin);
 
         /// Ensure rows needed for position (x, y) are computed and cached.
         fn ensureRowsCached(self: *Self, y: i32) void {
@@ -186,7 +186,7 @@ fn CachedLoopState(
             // Process full vectors
             var x: u32 = 0;
             while (x + vec_len <= width) : (x += vec_len) {
-                const result = self.evalKernel(row_buffer, x, y32);
+                const result = self.evalKernel(x, y32);
                 row_buffer[x..][0..vec_len].* = @as([vec_len]ElemT, result);
             }
 
@@ -194,11 +194,11 @@ fn CachedLoopState(
             if (x < width) {
                 if (width >= vec_len) {
                     const aligned_x = width - vec_len;
-                    const result = self.evalKernel(row_buffer, aligned_x, y32);
+                    const result = self.evalKernel(aligned_x, y32);
                     row_buffer[aligned_x..][0..vec_len].* = @as([vec_len]ElemT, result);
                 } else {
                     // Width < vec_len: element-by-element (rare edge case)
-                    const result = self.evalKernel(row_buffer, x, y32);
+                    const result = self.evalKernel(x, y32);
                     inline for (0..vec_len) |i| {
                         if (x + i < width) {
                             row_buffer[x + i] = result[i];
@@ -209,7 +209,7 @@ fn CachedLoopState(
         }
 
         /// Evaluate kernel at position (x, y32) and return the result vector.
-        inline fn evalKernel(self: *const Self, _: []ElemT, x: u32, y32: i32) VecT {
+        inline fn evalKernel(self: *const Self, x: u32, y32: i32) VecT {
             const x_offset: i32 = @intCast(x);
             const x32 = self.region.x + x_offset;
 

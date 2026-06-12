@@ -27,6 +27,72 @@ fn RequireVectorValueType(comptime SourceType: type, comptime vec_len: comptime_
     return ValueT;
 }
 
+/// Ceiling division for signed integers (infallible, unlike std.math.divCeil).
+fn divCeil(a: i32, b: i32) i32 {
+    return -@divFloor(-a, b);
+}
+
+/// Evaluate the PxQ grouped tuple at grouped position (x, y).
+///
+/// Contract: lane i of tuple element (dy * P + dx) is channel (dx, dy) of
+/// group x + i. The nested pixels of one group row are strided by P, so a
+/// P*vec_len-wide contiguous row is fetched and deinterlaced; for eval-kind
+/// nested sources the wide row is assembled from P consecutive vec_len-wide
+/// evaluations.
+///
+/// With `.unchecked` bounds, nested reads skip bounds checking where the
+/// nested source supports it; the caller must guarantee the covered nested
+/// area is in-bounds (see GroupSource.getInteriorRegion).
+inline fn evalGroupTuple(
+    comptime NestedSource: type,
+    comptime P: comptime_int,
+    comptime Q: comptime_int,
+    comptime vec_len: comptime_int,
+    comptime bounds: sources.BoundsCheck,
+    nested: NestedSource,
+    x: i32,
+    y: i32,
+) VecTuple(P * Q, RequireVectorValueType(NestedSource, vec_len)) {
+    const NestedInfo = sources.SourceTraits(NestedSource);
+    const VecT = RequireVectorValueType(NestedSource, vec_len);
+    const ElemT = @typeInfo(VecT).vector.child;
+    const WideVecT = @Vector(P * vec_len, ElemT);
+
+    var result: VecTuple(P * Q, VecT) = undefined;
+
+    // Map grouped coordinates to nested coordinates
+    const nested_x = x * P;
+    const nested_y = y * Q;
+
+    inline for (0..Q) |dy| {
+        const row_y = nested_y + @as(i32, @intCast(dy));
+        const row_data: WideVecT = switch (comptime NestedInfo.kind) {
+            .read => if (comptime bounds == .unchecked and NestedInfo.unchecked_kind == .read)
+                nested.readVecUnchecked(WideVecT, nested_x, row_y)
+            else
+                nested.readVec(WideVecT, nested_x, row_y),
+            .eval => blk: {
+                var row: [P * vec_len]ElemT = undefined;
+                inline for (0..P) |p| {
+                    const chunk_x = nested_x + @as(i32, @intCast(p * vec_len));
+                    const chunk = if (comptime bounds == .unchecked and NestedInfo.unchecked_kind == .eval)
+                        nested.evalAtUnchecked(chunk_x, row_y)
+                    else
+                        nested.evalAt(chunk_x, row_y);
+                    row[p * vec_len ..][0..vec_len].* = @as([vec_len]ElemT, chunk);
+                }
+                break :blk row;
+            },
+        };
+        const deinterlaced = std.simd.deinterlace(P, row_data);
+        inline for (0..P) |dx| {
+            result[dy * P + dx] = deinterlaced[dx];
+        }
+    }
+
+    return result;
+}
+
 // ============================================================================
 // MARK: Group Source
 // ============================================================================
@@ -38,8 +104,6 @@ pub fn GroupSource(comptime NestedSource: type, comptime P: comptime_int, compti
     const vec_len = deriveSourceVecLen(NestedSource);
     const VecT = RequireVectorValueType(NestedSource, vec_len);
     const ResultTuple = VecTuple(P * Q, VecT);
-    const ElemT = @typeInfo(VecT).vector.child;
-    const WideVecT = @Vector(P * vec_len, ElemT);
 
     return struct {
         nested: NestedSource,
@@ -61,31 +125,46 @@ pub fn GroupSource(comptime NestedSource: type, comptime P: comptime_int, compti
 
         const Self = @This();
 
-        /// Evaluate at a grouped position - returns a tuple of PxQ values
+        /// Evaluate at a grouped position - returns a tuple of PxQ values.
+        /// Lane i of tuple element (dy * P + dx) is channel (dx, dy) of group x + i.
         pub inline fn evalAt(self: Self, x: i32, y: i32) ResultTuple {
-            var result: ResultTuple = undefined;
+            return evalGroupTuple(NestedSource, P, Q, vec_len, .checked, self.nested, x, y);
+        }
 
-            // Map grouped coordinates to nested coordinates
-            const nested_x = x * P;
-            const nested_y = y * Q;
+        /// Evaluate at a grouped position using unchecked nested reads.
+        /// Caller MUST guarantee (x, y) lies inside getInteriorRegion().
+        pub inline fn evalAtUnchecked(self: Self, x: i32, y: i32) ResultTuple {
+            return evalGroupTuple(NestedSource, P, Q, vec_len, .unchecked, self.nested, x, y);
+        }
 
-            switch (comptime NestedInfo.kind) {
-                .eval => inline for (0..Q) |dy| {
-                    inline for (0..P) |dx| {
-                        const idx = dy * P + dx;
-                        result[idx] = self.nested.evalAt(nested_x + @as(i32, @intCast(dx)), nested_y + @as(i32, @intCast(dy)));
-                    }
-                },
-                .read => inline for (0..Q) |dy| {
-                    const row_data = self.nested.readVec(WideVecT, nested_x, nested_y + @as(i32, @intCast(dy)));
-                    const deinterlaced = std.simd.deinterlace(P, row_data);
-                    inline for (0..P) |dx| {
-                        result[dy * P + dx] = deinterlaced[dx];
-                    }
-                },
+        /// Returns the grouped region where evalAtUnchecked is safe: every
+        /// covered nested position is in-bounds for the whole nested chain.
+        /// Returns an empty region when the nested source has no unchecked path.
+        pub fn getInteriorRegion(self: Self) Region {
+            const inner: Region = blk: {
+                if (comptime NestedInfo.has_interior_region) {
+                    break :blk self.nested.getInteriorRegion();
+                }
+                if (comptime NestedInfo.kind == .read and NestedInfo.has_unchecked and NestedInfo.has_region) {
+                    break :blk self.nested.region;
+                }
+                break :blk .{ .width = 0, .height = 0 };
+            };
+            if (inner.width == 0 or inner.height == 0) {
+                return .{ .width = 0, .height = 0 };
             }
-
-            return result;
+            // Grouped position (x, y) is safe when the nested columns
+            // [x*P, x*P + P*vec_len) and rows [y*Q, (y+1)*Q) lie inside `inner`.
+            const x_start = divCeil(inner.x, P);
+            const x_stop = @divFloor(inner.stopX() - P * vec_len, P) + 1;
+            const y_start = divCeil(inner.y, Q);
+            const y_stop = @divFloor(inner.stopY(), Q);
+            return .{
+                .x = x_start,
+                .y = y_start,
+                .width = @intCast(@max(0, x_stop - x_start)),
+                .height = @intCast(@max(0, y_stop - y_start)),
+            };
         }
     };
 }
@@ -118,6 +197,7 @@ pub fn group(comptime P: comptime_int, comptime Q: comptime_int, source: anytype
 pub fn UngroupSource(comptime GroupedSource: type, comptime P: comptime_int, comptime Q: comptime_int) type {
     const vec_len = deriveSourceVecLen(GroupedSource);
     const VecT = GroupedSource.VectorType;
+    const GroupedInfo = sources.SourceTraits(GroupedSource);
 
     return struct {
         grouped: GroupedSource,
@@ -129,12 +209,11 @@ pub fn UngroupSource(comptime GroupedSource: type, comptime P: comptime_int, com
 
         const Self = @This();
 
-        /// Evaluate at an ungrouped position.
         /// Lane i of the result is the ungrouped pixel (x + i, y), matching the
         /// contract expected by process(). In a grouped result the lanes span
         /// consecutive *groups*, so the P channels of the matching row are
         /// re-interlaced back into pixel order.
-        pub inline fn evalAt(self: Self, x: i32, y: i32) VecT {
+        inline fn evalImpl(self: Self, comptime bounds: sources.BoundsCheck, x: i32, y: i32) VecT {
             // Map ungrouped coordinates to grouped coordinates
             const group_x = @divFloor(x, P);
             const group_y = @divFloor(y, Q);
@@ -145,7 +224,10 @@ pub fn UngroupSource(comptime GroupedSource: type, comptime P: comptime_int, com
 
             // One grouped evaluation covers groups group_x .. group_x + vec_len - 1,
             // which is enough for all vec_len ungrouped pixels.
-            const grouped_values = self.grouped.evalAt(group_x, group_y);
+            const grouped_values = if (comptime bounds == .unchecked and GroupedInfo.unchecked_kind == .eval)
+                self.grouped.evalAtUnchecked(group_x, group_y)
+            else
+                self.grouped.evalAt(group_x, group_y);
 
             inline for (0..Q) |dy| {
                 if (local_y == dy) {
@@ -164,6 +246,27 @@ pub fn UngroupSource(comptime GroupedSource: type, comptime P: comptime_int, com
                 }
             }
             unreachable;
+        }
+
+        /// Evaluate at an ungrouped position.
+        pub inline fn evalAt(self: Self, x: i32, y: i32) VecT {
+            return self.evalImpl(.checked, x, y);
+        }
+
+        /// Evaluate at an ungrouped position using unchecked grouped reads.
+        /// Caller MUST guarantee (x, y) lies inside getInteriorRegion().
+        pub inline fn evalAtUnchecked(self: Self, x: i32, y: i32) VecT {
+            return self.evalImpl(.unchecked, x, y);
+        }
+
+        /// Returns the ungrouped region where evalAtUnchecked is safe.
+        /// An ungrouped position only touches the group containing it, so this
+        /// is the grouped interior scaled back to pixel coordinates.
+        pub fn getInteriorRegion(self: Self) Region {
+            if (comptime !GroupedInfo.has_interior_region) {
+                return .{ .width = 0, .height = 0 };
+            }
+            return self.grouped.getInteriorRegion().upscaled(P, Q);
         }
     };
 }
@@ -212,20 +315,27 @@ pub fn GroupDest(comptime NestedDest: type, comptime P: comptime_int, comptime Q
         const Self = @This();
 
         /// Write values to a grouped position
-        /// values should be a tuple of PxQ vectors
+        /// values should be a tuple of PxQ vectors.
+        /// Lane i of values[dy * P + dx] is channel (dx, dy) of group x + i, so
+        /// nested pixels of one row are strided by P: the P channel vectors of
+        /// each row are interlaced back into pixel order and written as one
+        /// contiguous wide store.
         pub fn write(self: Self, x: u32, y: u32, values: anytype) void {
             // Map grouped coordinates to nested coordinates
             const nested_x = x * P;
             const nested_y = y * Q;
 
             inline for (0..Q) |dy| {
-                inline for (0..P) |dx| {
-                    const idx = dy * P + dx;
-                    self.nested.write(
-                        nested_x + @as(u32, @intCast(dx)),
-                        nested_y + @as(u32, @intCast(dy)),
-                        values[idx],
-                    );
+                const row_y = nested_y + @as(u32, @intCast(dy));
+                if (comptime P == 1) {
+                    self.nested.write(nested_x, row_y, values[dy]);
+                } else {
+                    const VecT = @TypeOf(values[dy * P]);
+                    var channels: [P]VecT = undefined;
+                    inline for (0..P) |dx| {
+                        channels[dx] = values[dy * P + dx];
+                    }
+                    self.nested.write(nested_x, row_y, std.simd.interlace(channels));
                 }
             }
         }
@@ -274,15 +384,13 @@ pub fn groupDest(comptime P: comptime_int, comptime Q: comptime_int, dest: anyty
 
 /// Accessor for grouped pixels in kernel functions.
 /// Provides access to PxQ pixel groups as tuples.
-pub fn GroupAccessor(comptime SrcType: type, comptime VecT: type, comptime P: comptime_int, comptime Q: comptime_int) type {
+/// With `.unchecked` bounds, nested reads skip bounds checking where the
+/// nested source supports it (interior fast path).
+pub fn GroupAccessor(comptime SrcType: type, comptime VecT: type, comptime P: comptime_int, comptime Q: comptime_int, comptime bounds: sources.BoundsCheck) type {
     const NestedType = @TypeOf(@as(SrcType, undefined).nested);
-    const NestedInfo = sources.SourceTraits(NestedType);
     const vec_len = @typeInfo(VecT).vector.len;
     const ValueT = RequireVectorValueType(NestedType, vec_len);
     const ResultTuple = VecTuple(P * Q, ValueT);
-    const ElemT = @typeInfo(ValueT).vector.child;
-    // Wide vector for reading P pixels at once per row
-    const WideVecT = @Vector(P * vec_len, ElemT);
 
     return struct {
         source: SrcType,
@@ -298,33 +406,16 @@ pub fn GroupAccessor(comptime SrcType: type, comptime VecT: type, comptime P: co
 
         /// Get all PxQ values at offset (dx, dy) in group coordinates as a tuple
         pub inline fn getAt(self: Self, dx: i32, dy: i32) ResultTuple {
-            const x = self.current_x + dx;
-            const y = self.current_y + dy;
-
-            var result: ResultTuple = undefined;
-
-            // Map grouped coordinates to nested coordinates
-            const nested_x = x * P;
-            const nested_y = y * Q;
-
-            const nested = self.source.nested;
-            switch (comptime NestedInfo.kind) {
-                .eval => inline for (0..Q) |qy| {
-                    inline for (0..P) |px| {
-                        const idx = qy * P + px;
-                        result[idx] = nested.evalAt(nested_x + @as(i32, @intCast(px)), nested_y + @as(i32, @intCast(qy)));
-                    }
-                },
-                .read => inline for (0..Q) |qy| {
-                    const row_data = nested.readVec(WideVecT, nested_x, nested_y + @as(i32, @intCast(qy)));
-                    const deinterlaced = std.simd.deinterlace(P, row_data);
-                    inline for (0..P) |px| {
-                        result[qy * P + px] = deinterlaced[px];
-                    }
-                },
-            }
-
-            return result;
+            return evalGroupTuple(
+                NestedType,
+                P,
+                Q,
+                vec_len,
+                bounds,
+                self.source.nested,
+                self.current_x + dx,
+                self.current_y + dy,
+            );
         }
 
         /// Get a specific pixel within the group at offset (dx, dy)

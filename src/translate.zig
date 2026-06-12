@@ -37,6 +37,14 @@ fn DataTranslatedSource(comptime SourceType: type) type {
         region: Region,
 
         pub const OutputScalarType = SourceType.OutputScalarType;
+        /// Forward the nested padding policy so PixelInterpolator keeps its
+        /// vectorized clamp gather through translated sources (clamping to the
+        /// shifted region composes with the coordinate remap). `void` when the
+        /// nested source doesn't expose one.
+        pub const PaddingPolicyType = if (@hasDecl(SourceType, "PaddingPolicyType"))
+            SourceType.PaddingPolicyType
+        else
+            void;
         const Self = @This();
 
         pub fn read(self: Self, x: i32, y: i32) OutputScalarType {
