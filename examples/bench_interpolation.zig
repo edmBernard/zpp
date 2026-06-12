@@ -32,6 +32,7 @@ fn runBenchmark(
 
         const interp = zpp.interpLoop(f32v, method, source, output_region, {}, resizeKernel);
         zpp.process(interp, dest);
+        std.mem.doNotOptimizeAway(dest.data);
 
         times[iter] = @intCast(timer_start.untilNow(io, .awake).toNanoseconds());
     }

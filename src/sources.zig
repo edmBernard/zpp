@@ -311,6 +311,10 @@ pub fn InputSource(comptime T: type, comptime PaddingPolicy: type) type {
         region: Region,
 
         pub const OutputScalarType = T;
+        /// The padding policy used for out-of-bounds reads. Exposed so that
+        /// consumers (e.g. PixelInterpolator) can use vectorized clamp/mask
+        /// gathers instead of per-pixel checked reads.
+        pub const PaddingPolicyType = PaddingPolicy;
         const Self = @This();
 
         /// Read a value at the given position, applying padding policy for out-of-bounds.

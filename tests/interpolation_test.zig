@@ -181,3 +181,65 @@ test "InterpLoop: 2x scale with linear produces correct value" {
     };
     try std.testing.expectEqual(expected_data, output_data);
 }
+
+// MARK: InterpLoop Cubic: identity transform preserves values
+test "InterpLoop Cubic: identity transform preserves values" {
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
+
+    var input_data: [8]f32 = undefined;
+    th.fillRamp(f32, &input_data, 1, 1);
+    var output_data = [_]f32{0} ** 8;
+
+    const source = try zpp.makeSource(f32, &input_data, region.width, region);
+    const destination = try zpp.makeDest(f32, &output_data, region.width, region);
+
+    // Identity transform kernel - sample at same coordinates
+    const interp_kernel = struct {
+        fn process(ctx: anytype, interp: anytype, x: f32x4, y: f32x4) f32x4 {
+            _ = ctx;
+            return interp.sample(x, y);
+        }
+    };
+
+    const result = zpp.interpLoop(f32x4, .cubic, source, region, .{}, interp_kernel.process);
+    zpp.process(result, destination);
+
+    // Catmull-Rom weights at t=0 are (0, 1, 0, 0), so integer-coordinate
+    // sampling must reproduce the input exactly, even at the padded edges.
+    const expected_data: [8]f32 = .{
+        1.0, 2.0, 3.0, 4.0,
+        5.0, 6.0, 7.0, 8.0,
+    };
+    try std.testing.expectEqual(expected_data, output_data);
+}
+
+// MARK: InterpLoop Linear: zero padding zeroes out-of-bounds samples
+test "InterpLoop Linear: zero padding zeroes out-of-bounds samples" {
+    const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
+
+    var input_data: [8]f32 = undefined;
+    th.fillRamp(f32, &input_data, 1, 1);
+    var output_data = [_]f32{0} ** 8;
+
+    const source = try zpp.makePaddedSource(f32, zpp.ZeroPadding, &input_data, region.width, region);
+    const destination = try zpp.makeDest(f32, &output_data, region.width, region);
+
+    // Sample half a pixel to the left: at x=0 the left tap reads outside the
+    // region and must contribute zero, not the repeated edge pixel.
+    const interp_kernel = struct {
+        fn process(ctx: anytype, interp: anytype, x: f32x4, y: f32x4) f32x4 {
+            _ = ctx;
+            const half: f32x4 = @splat(0.5);
+            return interp.sample(x - half, y);
+        }
+    };
+
+    const result = zpp.interpLoop(f32x4, .linear, source, region, .{}, interp_kernel.process);
+    zpp.process(result, destination);
+
+    const expected_data: [8]f32 = .{
+        0.5, 1.5, 2.5, 3.5,
+        2.5, 5.5, 6.5, 7.5,
+    };
+    try std.testing.expectEqual(expected_data, output_data);
+}

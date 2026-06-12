@@ -24,10 +24,21 @@ pub const InterpolationMethod = enum {
 
 /// Pixel interpolator that provides interpolated access to an image.
 /// Used within InterpLoop kernels to sample pixels at non-integer coordinates.
+///
+/// Coordinate math, interpolation weights, and blending are evaluated on
+/// whole vectors (one lane per output pixel). Only the pixel fetches are
+/// per-lane gathers, since each lane samples an arbitrary source position.
 pub fn PixelInterpolator(comptime SourceType: type, comptime VecT: type, comptime method: InterpolationMethod) type {
-    const SourceInfo = sources.SourceTraits(SourceType);
     const vec_len = @typeInfo(VecT).vector.len;
     const ElemT = @typeInfo(VecT).vector.child;
+    const IndexVecT = @Vector(vec_len, i32);
+    const Traits = sources.SourceTraits(SourceType);
+
+    // Sources that expose their padding policy (InputSource) support a
+    // branch-free gather: clamp the coordinates with vector min/max, read
+    // unchecked, and mask lanes to zero if the policy requires it.
+    const has_clamp_gather = Traits.kind == .read and Traits.has_unchecked and
+        @hasDecl(SourceType, "PaddingPolicyType");
 
     return struct {
         source: SourceType,
@@ -46,102 +57,147 @@ pub fn PixelInterpolator(comptime SourceType: type, comptime VecT: type, comptim
 
         /// Nearest neighbor interpolation - just round to nearest integer
         inline fn sampleNearest(self: Self, x: VecT, y: VecT) VecT {
-            var result: VecT = @splat(0);
-            const x_rounded = @round(x);
-            const y_rounded = @round(y);
-
-            inline for (0..vec_len) |i| {
-                const xi: i32 = @round(x_rounded[i]);
-                const yi: i32 = @round(y_rounded[i]);
-                result[i] = self.readPixel(xi, yi);
-            }
-            return result;
+            @setEvalBranchQuota(1000 + 32 * vec_len);
+            const xi: IndexVecT = @intFromFloat(@round(x));
+            const yi: IndexVecT = @intFromFloat(@round(y));
+            return self.gather(xi, yi);
         }
 
         /// Bilinear interpolation
         inline fn sampleLinear(self: Self, x: VecT, y: VecT) VecT {
-            var result: VecT = @splat(0);
+            @setEvalBranchQuota(1000 + 128 * vec_len);
+            const x0f = @floor(x);
+            const y0f = @floor(y);
 
-            inline for (0..vec_len) |i| {
-                const xf = x[i];
-                const yf = y[i];
+            // Fractional parts
+            const fx = x - x0f;
+            const fy = y - y0f;
 
-                // Get integer coordinates
-                const x0: i32 = @floor(xf);
-                const y0: i32 = @floor(yf);
-                const x1 = x0 + 1;
-                const y1 = y0 + 1;
+            // Integer coordinates of the top-left corner per lane
+            const x0: IndexVecT = @intFromFloat(x0f);
+            const y0: IndexVecT = @intFromFloat(y0f);
+            const one_i: IndexVecT = @splat(1);
+            const x1 = x0 + one_i;
+            const y1 = y0 + one_i;
 
-                // Get fractional parts
-                const fx = xf - @floor(xf);
-                const fy = yf - @floor(yf);
+            // Gather the 4 corners, one full vector per tap
+            const p00 = self.gather(x0, y0);
+            const p10 = self.gather(x1, y0);
+            const p01 = self.gather(x0, y1);
+            const p11 = self.gather(x1, y1);
 
-                // Sample 4 corners
-                const p00 = self.readPixel(x0, y0);
-                const p10 = self.readPixel(x1, y0);
-                const p01 = self.readPixel(x0, y1);
-                const p11 = self.readPixel(x1, y1);
-
-                // Bilinear interpolation
-                const top = p00 * (1.0 - fx) + p10 * fx;
-                const bottom = p01 * (1.0 - fx) + p11 * fx;
-                result[i] = top * (1.0 - fy) + bottom * fy;
-            }
-            return result;
+            // Bilinear blend
+            const ones: VecT = @splat(1.0);
+            const top = p00 * (ones - fx) + p10 * fx;
+            const bottom = p01 * (ones - fx) + p11 * fx;
+            return top * (ones - fy) + bottom * fy;
         }
 
         /// Bicubic interpolation using Catmull-Rom spline
         inline fn sampleCubic(self: Self, x: VecT, y: VecT) VecT {
-            var result: VecT = @splat(0);
+            @setEvalBranchQuota(1000 + 512 * vec_len);
+            const x1f = @floor(x);
+            const y1f = @floor(y);
 
-            inline for (0..vec_len) |i| {
-                const xf = x[i];
-                const yf = y[i];
+            // Fractional parts
+            const fx = x - x1f;
+            const fy = y - y1f;
 
-                // Get integer coordinates (center of 4x4 patch)
-                const x1: i32 = @floor(xf);
-                const y1: i32 = @floor(yf);
+            // Integer coordinates (center of 4x4 patch) per lane
+            const x1v: IndexVecT = @intFromFloat(x1f);
+            const y1v: IndexVecT = @intFromFloat(y1f);
 
-                // Fractional parts
-                const fx = xf - @floor(xf);
-                const fy = yf - @floor(yf);
-
-                // Sample 4x4 neighborhood
-                var rows: [4]ElemT = undefined;
-                inline for (0..4) |dy| {
-                    const yi = y1 - 1 + @as(i32, @intCast(dy));
-                    var cols: [4]ElemT = undefined;
-                    inline for (0..4) |dx| {
-                        const xi = x1 - 1 + @as(i32, @intCast(dx));
-                        cols[dx] = self.readPixel(xi, yi);
-                    }
-                    rows[dy] = cubicInterpolate(cols, fx);
-                }
-                result[i] = cubicInterpolate(rows, fy);
+            // Column coordinates of the 4x4 patch, shared by all rows
+            var xs: [4]IndexVecT = undefined;
+            inline for (0..4) |dx| {
+                xs[dx] = x1v + @as(IndexVecT, @splat(@as(i32, @intCast(dx)) - 1));
             }
-            return result;
+
+            // Gather and interpolate row by row, then across rows
+            var rows: [4]VecT = undefined;
+            inline for (0..4) |dy| {
+                const yi = y1v + @as(IndexVecT, @splat(@as(i32, @intCast(dy)) - 1));
+                var cols: [4]VecT = undefined;
+                inline for (0..4) |dx| {
+                    cols[dx] = self.gather(xs[dx], yi);
+                }
+                rows[dy] = cubicInterpolate(cols, fx);
+            }
+            return cubicInterpolate(rows, fy);
         }
 
-        /// Cubic interpolation helper using Catmull-Rom weights
-        inline fn cubicInterpolate(p: [4]ElemT, t: ElemT) ElemT {
+        /// Cubic interpolation helper using Catmull-Rom weights,
+        /// evaluated on whole vectors (one lane per output pixel).
+        inline fn cubicInterpolate(p: [4]VecT, t: VecT) VecT {
             // Catmull-Rom spline coefficients
             const t2 = t * t;
             const t3 = t2 * t;
 
+            const half: VecT = @splat(0.5);
+            const one: VecT = @splat(1.0);
+            const one_and_half: VecT = @splat(1.5);
+            const two: VecT = @splat(2.0);
+            const two_and_half: VecT = @splat(2.5);
+
             // Catmull-Rom with a = -0.5
-            const w0 = -0.5 * t3 + t2 - 0.5 * t;
-            const w1 = 1.5 * t3 - 2.5 * t2 + 1.0;
-            const w2 = -1.5 * t3 + 2.0 * t2 + 0.5 * t;
-            const w3 = 0.5 * t3 - 0.5 * t2;
+            const w0 = -half * t3 + t2 - half * t;
+            const w1 = one_and_half * t3 - two_and_half * t2 + one;
+            const w2 = -one_and_half * t3 + two * t2 + half * t;
+            const w3 = half * t3 - half * t2;
 
             return p[0] * w0 + p[1] * w1 + p[2] * w2 + p[3] * w3;
         }
 
-        /// Read a single pixel at integer coordinates.
-        /// Interpolation is scalar-native here; each SIMD lane samples independently.
-        inline fn readPixel(self: Self, xi: i32, yi: i32) ElemT {
-            _ = SourceInfo;
-            return sources.readSourceScalarChecked(SourceType, self.source, xi, yi);
+        /// Gather one pixel per lane at integer coordinates.
+        /// Each lane samples an independent source position, so the fetches
+        /// themselves run per lane; bounds handling is vectorized when the
+        /// source exposes its padding policy.
+        inline fn gather(self: Self, xi: IndexVecT, yi: IndexVecT) VecT {
+            if (comptime has_clamp_gather) {
+                const r = self.source.region;
+                if (r.width > 0 and r.height > 0) {
+                    return self.gatherClamped(xi, yi);
+                }
+            }
+            return self.gatherChecked(xi, yi);
+        }
+
+        /// Branch-free gather: clamp coordinates into the source region with
+        /// vector min/max, read unchecked (clamped coordinates are always
+        /// in-bounds), then zero out-of-bounds lanes if the padding policy
+        /// requires it (ZeroPadding). RepeatEdgePadding is the clamp itself.
+        inline fn gatherClamped(self: Self, xi: IndexVecT, yi: IndexVecT) VecT {
+            const r = self.source.region;
+            const min_x: IndexVecT = @splat(r.x);
+            const max_x: IndexVecT = @splat(r.stopX() - 1);
+            const min_y: IndexVecT = @splat(r.y);
+            const max_y: IndexVecT = @splat(r.stopY() - 1);
+            const cx: [vec_len]i32 = @max(min_x, @min(xi, max_x));
+            const cy: [vec_len]i32 = @max(min_y, @min(yi, max_y));
+
+            var out: VecT = undefined;
+            inline for (0..vec_len) |i| {
+                out[i] = sources.readSourceScalarUnchecked(SourceType, self.source, cx[i], cy[i]);
+            }
+
+            if (comptime SourceType.PaddingPolicyType.needs_mask) {
+                const in_bounds = (xi >= min_x) & (xi <= max_x) & (yi >= min_y) & (yi <= max_y);
+                const zero: VecT = @splat(0);
+                out = @select(ElemT, in_bounds, out, zero);
+            }
+            return out;
+        }
+
+        /// Generic fallback gather using checked per-pixel reads. Used for
+        /// eval-kind sources (expression trees) and custom padding policies.
+        inline fn gatherChecked(self: Self, xi: IndexVecT, yi: IndexVecT) VecT {
+            const xa: [vec_len]i32 = xi;
+            const ya: [vec_len]i32 = yi;
+            var out: VecT = undefined;
+            inline for (0..vec_len) |i| {
+                out[i] = sources.readSourceScalarChecked(SourceType, self.source, xa[i], ya[i]);
+            }
+            return out;
         }
     };
 }
