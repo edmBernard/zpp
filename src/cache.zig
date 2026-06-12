@@ -56,20 +56,20 @@ fn RowCache(comptime T: type, comptime max_rows: usize) type {
             return self;
         }
 
-        /// Setup the cache for a given width and margin requirements.
-        /// `above` is how many rows above the current row are needed.
-        /// `below` is how many rows below the current row are needed.
-        pub fn setup(self: *Self, width: u32, above: u32, below: u32) SetupError!void {
-            const needed_rows = above + 1 + below;
-            if (needed_rows > max_rows) {
+        /// Setup the cache for a given width and number of rows.
+        /// `num_rows` is the size of the sliding window of rows kept alive;
+        /// it must cover the widest vertical access pattern of any consumer,
+        /// otherwise rows evict each other and every access recomputes a full row.
+        pub fn setup(self: *Self, width: u32, num_rows: usize) SetupError!void {
+            if (num_rows > max_rows or num_rows == 0) {
                 return error.CacheTooSmall;
             }
 
             self.width = width;
-            self.num_rows = needed_rows;
+            self.num_rows = num_rows;
 
             // Allocate row buffers
-            for (0..needed_rows) |i| {
+            for (0..num_rows) |i| {
                 if (self.data[i].len != width) {
                     if (self.data[i].len > 0) {
                         self.allocator.free(self.data[i]);
@@ -162,19 +162,25 @@ fn CachedLoopState(
             InputAccessorGeneric(SrcType, VecT, .checked, opts.margin);
 
         /// Ensure rows needed for position (x, y) are computed and cached.
-        fn ensureRowsCached(self: *Self, y: i32) void {
+        /// Returns the cache slot holding row `y`, so callers don't recompute it
+        /// (the slot lookup is an integer division, significant for cheap kernels).
+        fn ensureRowsCached(self: *Self, y: i32) usize {
             const y64: i64 = y;
             const above: i64 = opts.margin.top;
             const below: i64 = opts.margin.bottom;
 
+            var slot_y: usize = 0;
             var j: i64 = -above;
             while (j <= below) : (j += 1) {
                 const row = y64 + j;
-                if (!self.cache.isRowUpToDate(row)) {
+                const slot = self.cache.getSlot(row);
+                if (self.cache.image_rows_in_slots[slot] != row) {
                     self.computeRow(row);
-                    self.cache.markRowAsUpToDate(row);
+                    self.cache.image_rows_in_slots[slot] = row;
                 }
+                if (j == 0) slot_y = slot;
             }
+            return slot_y;
         }
 
         /// Compute a single row and store it in the cache.
@@ -231,15 +237,22 @@ fn CachedLoopState(
         /// Evaluate at a specific position, using cached data.
         pub fn evalAt(self: *Self, x: i32, y: i32) VecT {
             // Ensure needed rows are cached
-            self.ensureRowsCached(y);
+            const slot = self.ensureRowsCached(y);
 
-            // Read from cache (getRowData hoisted out of per-lane loop)
-            var result: VecT = @splat(0);
-            const row_data = self.cache.getRowData(y);
+            const row_data = self.cache.data[slot];
             const width: i32 = @intCast(self.region.width);
+            const px0 = x - self.region.x;
+
+            // Fast path: the whole vector is in bounds, load it directly.
+            if (px0 >= 0 and px0 + vec_len <= width) {
+                return row_data[@intCast(px0)..][0..vec_len].*;
+            }
+
+            // Edge path: per-lane bounds checks, out-of-bounds lanes read 0.
+            var result: VecT = @splat(0);
             inline for (0..vec_len) |i| {
                 const offset: i32 = @intCast(i);
-                const px = x - self.region.x + offset;
+                const px = px0 + offset;
                 if (px >= 0 and px < width) {
                     result[i] = row_data[@intCast(px)];
                 }
@@ -309,8 +322,12 @@ pub fn CachedLoopOwner(
 }
 
 /// Create a cached processing loop.
-/// Use this when you have vertical margins and want to avoid recomputing rows.
-/// The cache size should be at least `margin.top + 1 + margin.bottom`.
+/// Use this when downstream consumers re-read rows (vertical margins, multiple
+/// readers) and you want to avoid recomputing them.
+/// `max_cache_rows` is the sliding window of rows kept alive; it must cover the
+/// widest vertical access pattern of the consumers reading this loop (e.g. 3 for
+/// a consumer with `.vertical(1)` margin) and be at least
+/// `margin.top + 1 + margin.bottom` of this loop's own options.
 /// Returns an owning handle; call `view()` to obtain the copyable source for expression trees.
 pub fn cachedLoop(
     comptime VecT: type,
@@ -340,7 +357,15 @@ pub fn cachedLoop(
         },
     };
     errdefer owner.state.cache.deinit();
-    try owner.state.cache.setup(source.region.width, opts.margin.top, opts.margin.bottom);
+    // The cache must hold all max_cache_rows rows: consumers with vertical
+    // margins read several adjacent rows per output row, and the producer's
+    // own margin says nothing about that access pattern. Sizing by the
+    // producer margin would alias those rows to the same slot and recompute
+    // a full row on every access.
+    if (opts.margin.top + 1 + opts.margin.bottom > max_cache_rows) {
+        return error.CacheTooSmall;
+    }
+    try owner.state.cache.setup(source.region.width, max_cache_rows);
 
     return owner;
 }
