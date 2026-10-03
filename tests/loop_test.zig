@@ -103,7 +103,7 @@ test "Loop: expression tree chains two kernels across types" {
         // 2x4 input
         var input_data: [8]ScalarType = undefined;
         th.fillRamp(ScalarType, &input_data, 1, 1);
-        var output_data = [_]ScalarType{0} ** 8;
+        var output_data: [8]ScalarType = @splat(0);
 
         const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
         const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);
@@ -149,7 +149,7 @@ test "Loop: expression tree chains two kernels with margin (V then H)" {
         // 2x4 input
         var input_data: [width * height]ScalarType = undefined;
         th.fillRamp(ScalarType, &input_data, 1, 1);
-        var output_data = [_]ScalarType{0} ** (width * height);
+        var output_data: [width * height]ScalarType = @splat(0);
 
         const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
         const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);
@@ -196,7 +196,7 @@ test "Loop: expression tree chains two kernels with margin (H then V)" {
         // 2x4 input
         var input_data: [width * height]ScalarType = undefined;
         th.fillRamp(ScalarType, &input_data, 1, 1);
-        var output_data = [_]ScalarType{0} ** (width * height);
+        var output_data: [width * height]ScalarType = @splat(0);
 
         const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
         const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);
@@ -241,9 +241,9 @@ test "Loop: non-origin region preserves data" {
         const image_height = 3;
         const region: zpp.Region = .{ .x = 2, .y = 1, .width = 4, .height = 2 };
 
-        var input_data = [_]ScalarType{0} ** (image_width * image_height);
+        var input_data: [image_width * image_height]ScalarType = @splat(0);
         th.fillRamp(ScalarType, &input_data, 1, 1);
-        var output_data = [_]ScalarType{0} ** (image_width * image_height);
+        var output_data: [image_width * image_height]ScalarType = @splat(0);
 
         const source = try zpp.makeSource(ScalarType, &input_data, image_width, region);
         const destination = try zpp.makeDest(ScalarType, &output_data, image_width, region);
@@ -276,7 +276,7 @@ test "Loop: margins with RepeatEdgePadding across types" {
         const ScalarType = @typeInfo(LoopType).vector.child;
 
         var input_data: [4]ScalarType = .{ 1.0, 2.0, 3.0, 4.0 };
-        var output_data = [_]ScalarType{0} ** 4;
+        var output_data: [4]ScalarType = @splat(0);
 
         const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
         const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);
@@ -312,7 +312,7 @@ test "Loop: margins on wide region triggers split iteration" {
 
         var input_data: [36]ScalarType = undefined;
         th.fillRamp(ScalarType, &input_data, 1, 1);
-        var output_data = [_]ScalarType{0} ** 36;
+        var output_data: [36]ScalarType = @splat(0);
 
         const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
         const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);
@@ -356,7 +356,7 @@ test "Loop: vertical margins on tall region triggers split iteration" {
 
     var input_data: [72]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
-    var output_data = [_]f32{0} ** 72;
+    var output_data: [72]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input_data, region.width, region);
     const destination = try zpp.makeDest(f32, &output_data, region.width, region);
@@ -404,7 +404,7 @@ test "Loop: generator with coordinates at non-origin region" {
         inline for (AllTypes) |OutputType| {
             const ScalarType = @typeInfo(OutputType).vector.child;
 
-            var output = [_]ScalarType{0} ** (image_width * image_height);
+            var output: [image_width * image_height]ScalarType = @splat(0);
             const destination = try zpp.makeDest(ScalarType, &output, image_width, region);
 
             const gen_kernel = struct {
@@ -517,7 +517,7 @@ test "Loop: Process with Loop call the correct number of time the kernel" {
     var input_data: [10]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
     const source = try zpp.makeSource(f32, &input_data, region.width, region);
-    var output_data = [_]f32{0} ** (10);
+    var output_data: [10]f32 = @splat(0);
     const destination = try zpp.makeDest(f32, &output_data, region.width, region);
 
     // Count how many batch and scalar calls we get
@@ -593,7 +593,7 @@ test "Loop: width=2 processes sub-vector region correctly" {
 
         var input_data: [6]ScalarType = undefined;
         th.fillRamp(ScalarType, &input_data, 1, 1);
-        var output_data = [_]ScalarType{0} ** 6;
+        var output_data: [6]ScalarType = @splat(0);
 
         const source = try zpp.makeSource(ScalarType, &input_data, region.width, region);
         const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);

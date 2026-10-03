@@ -175,7 +175,7 @@ test "Stats destination: compute on the given region" {
     const region_in: zpp.Region = .{ .x = 0, .y = 0, .width = image_width, .height = image_height };
     const region_stat: zpp.Region = .{ .x = 2, .y = 1, .width = 4, .height = 2 };
 
-    var input_data = [_]f32{0} ** (image_width * image_height);
+    var input_data: [image_width * image_height]f32 = @splat(0);
     th.fillRamp(f32, &input_data, 1, 1);
 
     const source = try zpp.makeSource(f32, &input_data, region_in.width, region_in);
@@ -217,7 +217,7 @@ test "Stats destination: coords are absolute for non-zero region origin" {
     const region_in: zpp.Region = .{ .x = 0, .y = 0, .width = image_width, .height = image_height };
     const region_stat: zpp.Region = .{ .x = 2, .y = 1, .width = 4, .height = 2 };
 
-    var input_data = [_]f32{1} ** (image_width * image_height);
+    var input_data: [image_width * image_height]f32 = @splat(1);
     const source = try zpp.makeSource(f32, &input_data, region_in.width, region_in);
 
     const stat_kernel = struct {
@@ -258,7 +258,7 @@ test "Stats destination: compute stat directly from source" {
     const region_in: zpp.Region = .{ .x = 0, .y = 0, .width = image_width, .height = image_height };
     const region_stat: zpp.Region = .{ .x = 2, .y = 1, .width = 4, .height = 2 };
 
-    var input_data = [_]f32{0} ** (image_width * image_height);
+    var input_data: [image_width * image_height]f32 = @splat(0);
     th.fillRamp(f32, &input_data, 1, 1);
 
     const source = try zpp.makeSource(f32, &input_data, region_in.width, region_in);

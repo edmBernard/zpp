@@ -4,7 +4,7 @@ Guidelines for AI coding agents working on the zpp (Zig Pixel Processing) codeba
 
 ## Project Overview
 
-- **Language:** Zig (minimum version 0.16.0)
+- **Language:** Zig (minimum version 0.17.0)
 - **Type:** SIMD pixel processing library with examples
 - **Purpose:** Efficient image processing using Zig's vector capabilities
 - **License:** Apache 2.0

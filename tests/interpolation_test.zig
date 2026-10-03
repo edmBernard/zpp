@@ -13,7 +13,7 @@ test "InterpLoop Nearest: identity transform preserves values" {
 
     var input_data: [8]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
-    var output_data = [_]f32{0} ** 8;
+    var output_data: [8]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input_data, region.width, region);
     const destination = try zpp.makeDest(f32, &output_data, region.width, region);
@@ -43,7 +43,7 @@ test "InterpLoop Nearest: slightly shifted transform preserves values" {
 
     var input_data: [8]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
-    var output_data = [_]f32{0} ** 8;
+    var output_data: [8]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input_data, region.width, region);
     const destination = try zpp.makeDest(f32, &output_data, region.width, region);
@@ -76,7 +76,7 @@ test "InterpLoop: 2x scale with nearest produces correct duplication" {
     var input_data: [16]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
 
-    var output_data = [_]f32{0} ** 64;
+    var output_data: [64]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input_data, input_region.width, input_region);
     const destination = try zpp.makeDest(f32, &output_data, output_region.width, output_region);
@@ -110,7 +110,7 @@ test "InterpLoop: 2x scale with nearest produces correct duplication" {
 test "InterpLoop Nearest: identity transform with generator source" {
     const region: zpp.Region = .{ .x = 0, .y = 0, .width = 4, .height = 2 };
 
-    var output_data = [_]f32{0} ** 8;
+    var output_data: [8]f32 = @splat(0);
     const destination = try zpp.makeDest(f32, &output_data, region.width, region);
 
     // Generator that produces y * width + x (ramp pattern)
@@ -152,7 +152,7 @@ test "InterpLoop: 2x scale with linear produces correct value" {
     var input_data: [16]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
 
-    var output_data = [_]f32{0} ** 64;
+    var output_data: [64]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input_data, input_region.width, input_region);
     const destination = try zpp.makeDest(f32, &output_data, output_region.width, output_region);
@@ -188,7 +188,7 @@ test "InterpLoop Cubic: identity transform preserves values" {
 
     var input_data: [8]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
-    var output_data = [_]f32{0} ** 8;
+    var output_data: [8]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input_data, region.width, region);
     const destination = try zpp.makeDest(f32, &output_data, region.width, region);
@@ -219,7 +219,7 @@ test "InterpLoop Linear: zero padding zeroes out-of-bounds samples" {
 
     var input_data: [8]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
-    var output_data = [_]f32{0} ** 8;
+    var output_data: [8]f32 = @splat(0);
 
     const source = try zpp.makePaddedSource(f32, zpp.ZeroPadding, &input_data, region.width, region);
     const destination = try zpp.makeDest(f32, &output_data, region.width, region);
@@ -260,7 +260,7 @@ test "InterpLoop Linear: identity transform through a translated source" {
     // reproduce the original pixels at the shifted positions.
     const out_region = translated.region;
     const stride: u32 = width + 3; // covers the shifted region's stopX
-    var output = [_]f32{0} ** (stride * 3);
+    var output: [stride * 3]f32 = @splat(0);
     const destination = try zpp.makeDest(f32, &output, stride, out_region);
 
     const kernel = struct {

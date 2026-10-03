@@ -50,7 +50,7 @@ test "Generator: produce correct coordinates type: larger region than batch size
         inline for (AllTypes) |OutputType| {
             const ScalarType = @typeInfo(OutputType).vector.child;
 
-            var output = [_]ScalarType{0} ** 16;
+            var output: [16]ScalarType = @splat(0);
             const destination = try zpp.makeDest(ScalarType, &output, region.width, region);
 
             const processing_kernel = struct {
@@ -67,7 +67,7 @@ test "Generator: produce correct coordinates type: larger region than batch size
             const result = zpp.generate(CoordVecT, .{}, processing_kernel.process);
             zpp.process(result, destination);
 
-            var expectedOutput = [_]ScalarType{0} ** 16;
+            var expectedOutput: [16]ScalarType = @splat(0);
             for (0..region.height) |y| {
                 for (0..region.width) |x| {
                     const idx = y * region.width + x;
@@ -86,7 +86,7 @@ test "Generator: produce correct coordinates type: region width not multiple of 
         inline for (AllTypes) |OutputType| {
             const ScalarType = @typeInfo(OutputType).vector.child;
 
-            var output = [_]ScalarType{0} ** 20;
+            var output: [20]ScalarType = @splat(0);
             const destination = try zpp.makeDest(ScalarType, &output, region.width, region);
 
             const processing_kernel = struct {
@@ -103,7 +103,7 @@ test "Generator: produce correct coordinates type: region width not multiple of 
             const result = zpp.generate(CoordVecT, .{}, processing_kernel.process);
             zpp.process(result, destination);
 
-            var expectedOutput = [_]ScalarType{0} ** 20;
+            var expectedOutput: [20]ScalarType = @splat(0);
             for (0..region.height) |y| {
                 for (0..region.width) |x| {
                     const idx = y * region.width + x;
@@ -126,7 +126,7 @@ test "Generator: Only fill requested region: Same global size, different regions
         inline for (AllTypes) |OutputType| {
             const ScalarType = @typeInfo(OutputType).vector.child;
 
-            var output_data = [_]ScalarType{0} ** (image_width * image_height);
+            var output_data: [image_width * image_height]ScalarType = @splat(0);
             const destination = try zpp.makeDest(ScalarType, &output_data, output_stride, output_region);
 
             const processing_kernel = struct {
@@ -166,7 +166,7 @@ test "Generator: Only fill requested region: Same global size, different regions
 //         inline for (AllTypes) |OutputType| {
 //             const ScalarType = @typeInfo(OutputType).vector.child;
 
-//             var output_data = [_]ScalarType{0} ** (image_width * image_height);
+//             var output_data: [image_width * image_height]ScalarType = @splat(0);
 //             const destination = try zpp.makeDest(ScalarType, &output_data, output_stride, output_region);
 //             const generator_kernel = struct {
 //                 fn process(ctx: anytype, x: anytype, y: anytype) OutputType {

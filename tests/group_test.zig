@@ -20,7 +20,7 @@ test "Group: 2x2 source downscales region correctly" {
     for (test_cases) |tc| {
         const region: zpp.Region = .{ .x = 0, .y = 0, .width = tc.w, .height = tc.h };
 
-        var data = [_]f32{0} ** 128;
+        var data: [128]f32 = @splat(0);
         const source = try zpp.makeSource(f32, data[0 .. tc.w * tc.h], region.width, region);
 
         const grouped = zpp.group(2, 2, source);
@@ -44,7 +44,7 @@ test "Group: ungroup round-trip preserves region" {
     for (test_cases) |tc| {
         const region: zpp.Region = .{ .x = 0, .y = 0, .width = tc.w, .height = tc.h };
 
-        var data = [_]f32{0} ** 128;
+        var data: [128]f32 = @splat(0);
         const source = try zpp.makeSource(f32, data[0 .. tc.w * tc.h], region.width, region);
 
         const grouped = zpp.group(2, 2, source);
@@ -62,7 +62,7 @@ test "Group destination: upsampling nearest neighbor" {
     const in_region: zpp.Region = .{ .x = 0, .y = 0, .width = 2, .height = 2 };
 
     var input: [4]f32 = .{ 1.0, 2.0, 3.0, 4.0 };
-    var output_data = [_]f32{0} ** 16;
+    var output_data: [16]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input, in_region.width, in_region);
     const destination = try zpp.makeDest(f32, &output_data, dst_region.width, dst_region);
@@ -106,7 +106,7 @@ test "Group: depth to space 2x2 rearrangement" {
     var input_b: [4]f32 = .{ 10.0, 20.0, 30.0, 40.0 };
     var input_c: [4]f32 = .{ 100.0, 200.0, 300.0, 400.0 };
     var input_d: [4]f32 = .{ 1000.0, 2000.0, 3000.0, 4000.0 };
-    var output_data = [_]f32{0} ** 16;
+    var output_data: [16]f32 = @splat(0);
 
     const source_a = try zpp.makeSource(f32, &input_a, in_region.width, in_region);
     const source_b = try zpp.makeSource(f32, &input_b, in_region.width, in_region);
@@ -141,7 +141,7 @@ test "Group: depth to space 2x2 rearrangement with intermediate kernel" {
     var input_b: [4]f32 = .{ 10.0, 20.0, 30.0, 40.0 };
     var input_c: [4]f32 = .{ 100.0, 200.0, 300.0, 400.0 };
     var input_d: [4]f32 = .{ 1000.0, 2000.0, 3000.0, 4000.0 };
-    var output_data = [_]f32{0} ** 16;
+    var output_data: [16]f32 = @splat(0);
 
     const source_a = try zpp.makeSource(f32, &input_a, in_region.width, in_region);
     const source_b = try zpp.makeSource(f32, &input_b, in_region.width, in_region);
@@ -347,7 +347,7 @@ test "Group: ungroup round-trip preserves u16 source values" {
         9,  10, 11, 12,
         13, 14, 15, 16,
     };
-    var output = [_]u16{0} ** 16;
+    var output: [16]u16 = @splat(0);
 
     const source = try zpp.makeSource(u16, &input, region.width, region);
     const destination = try zpp.makeDest(u16, &output, region.width, region);
@@ -367,7 +367,7 @@ test "Group: ungroup round-trip preserves values on the SIMD vector path" {
 
     var input: [width * height]u16 = undefined;
     for (&input, 0..) |*v, i| v.* = @intCast(i + 1);
-    var output = [_]u16{0} ** (width * height);
+    var output: [width * height]u16 = @splat(0);
 
     const source = try zpp.makeSource(u16, &input, width, region);
     const destination = try zpp.makeDest(u16, &output, width, region);
@@ -387,7 +387,7 @@ test "Group: ungroup handles destination region with odd origin" {
 
     var input: [width * height]u16 = undefined;
     for (&input, 0..) |*v, i| v.* = @intCast(i + 1);
-    var output = [_]u16{0} ** (width * height);
+    var output: [width * height]u16 = @splat(0);
 
     const source = try zpp.makeSource(u16, &input, width, region);
     const destination = try zpp.makeDest(u16, &output, width, dest_region);
@@ -412,7 +412,7 @@ test "Group: loop accessor preserves grouped integer vectors" {
         9,  10, 11, 12,
         13, 14, 15, 16,
     };
-    var output = [_]u16{0} ** 4;
+    var output: [4]u16 = @splat(0);
 
     const source = try zpp.makeSource(u16, &input, region.width, region);
     const grouped = zpp.group(2, 2, source);
@@ -489,7 +489,7 @@ test "Group destination: depth to space on the SIMD vector path" {
         input_c[i] = @floatFromInt(3000 + i);
         input_d[i] = @floatFromInt(4000 + i);
     }
-    var output = [_]f32{0} ** (gw * 2 * 2);
+    var output: [gw * 2 * 2]f32 = @splat(0);
 
     const sa = try zpp.makeSource(f32, &input_a, gw, in_region);
     const sb = try zpp.makeSource(f32, &input_b, gw, in_region);
@@ -516,10 +516,10 @@ test "Group: direct space-to-depth on the SIMD vector path" {
     var input: [width * height]f32 = undefined;
     for (&input, 0..) |*v, i| v.* = @floatFromInt(i);
 
-    var out_a = [_]f32{0} ** (width * height / 4);
-    var out_b = [_]f32{0} ** (width * height / 4);
-    var out_c = [_]f32{0} ** (width * height / 4);
-    var out_d = [_]f32{0} ** (width * height / 4);
+    var out_a: [width * height / 4]f32 = @splat(0);
+    var out_b: [width * height / 4]f32 = @splat(0);
+    var out_c: [width * height / 4]f32 = @splat(0);
+    var out_d: [width * height / 4]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input, width, region);
     const grouped = zpp.group(2, 2, source);

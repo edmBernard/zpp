@@ -359,7 +359,7 @@ test "gradient kernel detects edges" {
         0.0, 0.0, 1.0, 1.0, // row 1
         0.0, 0.0, 1.0, 1.0, // row 2
     };
-    var output: [12]f32 = .{0} ** 12;
+    var output: [12]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input, 4, region);
     const dest = try zpp.makeDest(f32, &output, 4, region);
@@ -410,7 +410,7 @@ test "resize with interpLoop" {
 
     // Simple 2x2 source: corners have values 0, 1, 2, 3
     var source_data: [4]f32 = .{ 0.0, 1.0, 2.0, 3.0 };
-    var output_data: [16]f32 = .{0} ** 16;
+    var output_data: [16]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &source_data, 2, source_region);
     const dest = try zpp.makeDest(f32, &output_data, 4, output_region);

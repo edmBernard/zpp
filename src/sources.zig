@@ -170,12 +170,12 @@ pub fn SourceValueType(comptime SourceType: type, comptime vec_len: comptime_int
 }
 
 fn FirstLaneTupleType(comptime T: type) type {
-    const fields = @typeInfo(T).@"struct".fields;
-    var types: [fields.len]type = undefined;
-    inline for (fields, 0..) |field, i| {
-        types[i] = FirstLaneType(field.type);
+    const field_types = @typeInfo(T).@"struct".field_types;
+    var types: [field_types.len]type = undefined;
+    inline for (field_types, 0..) |FieldType, i| {
+        types[i] = FirstLaneType(FieldType);
     }
-    return std.meta.Tuple(&types);
+    return @Tuple(&types);
 }
 
 /// Scalar type produced by taking the first lane from a source result.
@@ -207,7 +207,7 @@ pub fn firstLane(result: anytype) FirstLaneType(@TypeOf(result)) {
                 @compileError("Unsupported struct type for firstLane: " ++ @typeName(T));
             }
             var out: FirstLaneType(T) = undefined;
-            inline for (0..s.fields.len) |i| {
+            inline for (0..s.field_types.len) |i| {
                 out[i] = firstLane(result[i]);
             }
             return out;

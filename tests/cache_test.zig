@@ -17,7 +17,7 @@ test "Cache: All loop result fit in cache" {
     var input_data: [8]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
 
-    var output_data = [_]f32{0} ** 8;
+    var output_data: [8]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input_data, region.width, region);
     const destination = try zpp.makeDest(f32, &output_data, region.width, region);
@@ -77,7 +77,7 @@ test "Cache: Smaller cache than loop result" {
     var input_data: [8]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
 
-    var output_data = [_]f32{0} ** 8;
+    var output_data: [8]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input_data, region.width, region);
     const destination = try zpp.makeDest(f32, &output_data, region.width, region);
@@ -131,7 +131,7 @@ test "Cache: Owner/view split keeps ownership explicit" {
 
     var input_data: [8]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
-    var output_data = [_]f32{0} ** 8;
+    var output_data: [8]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input_data, region.width, region);
     const destination = try zpp.makeDest(f32, &output_data, region.width, region);

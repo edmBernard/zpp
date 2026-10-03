@@ -16,7 +16,7 @@ test "Zip: two sources add correctly" {
     th.fillRamp(f32, &input_a, 1, 1);
     var input_b: [8]f32 = undefined;
     th.fillRamp(f32, &input_b, 10, 10);
-    var output_data = [_]f32{0} ** 8;
+    var output_data: [8]f32 = @splat(0);
 
     const source_a = try zpp.makeSource(f32, &input_a, region.width, region);
     const source_b = try zpp.makeSource(f32, &input_b, region.width, region);
@@ -50,8 +50,8 @@ test "Zip: fill two destination: kernel output is a struct" {
     var input_data: [8]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
 
-    var output_data_a = [_]f32{0} ** 8;
-    var output_data_b = [_]f32{0} ** 8;
+    var output_data_a: [8]f32 = @splat(0);
+    var output_data_b: [8]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input_data, region.width, region);
     const destination_a = try zpp.makeDest(f32, &output_data_a, region.width, region);
@@ -90,8 +90,8 @@ test "Zip: fill two destination: kernel output is an array" {
     var input_data: [8]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
 
-    var output_data_a = [_]f32{0} ** 8;
-    var output_data_b = [_]f32{0} ** 8;
+    var output_data_a: [8]f32 = @splat(0);
+    var output_data_b: [8]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input_data, region.width, region);
     const destination_a = try zpp.makeDest(f32, &output_data_a, region.width, region);
@@ -131,8 +131,8 @@ test "Zip: Can chained several zip kernels together" {
     var input_data: [8]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
 
-    var output_data_a = [_]f32{0} ** 8;
-    var output_data_b = [_]f32{0} ** 8;
+    var output_data_a: [8]f32 = @splat(0);
+    var output_data_b: [8]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input_data, region.width, region);
     const destination_a = try zpp.makeDest(f32, &output_data_a, region.width, region);
@@ -181,7 +181,7 @@ test "Zip: Can zip destination and Stats together" {
     var input_data: [8]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
 
-    var output_data = [_]f32{0} ** 8;
+    var output_data: [8]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input_data, region.width, region);
     const destination = try zpp.makeDest(f32, &output_data, region.width, region);
@@ -229,7 +229,7 @@ test "Zip: Can zip destination and Stats together version 2" {
     var input_data: [8]f32 = undefined;
     th.fillRamp(f32, &input_data, 1, 1);
 
-    var output_data = [_]f32{0} ** 8;
+    var output_data: [8]f32 = @splat(0);
 
     const source = try zpp.makeSource(f32, &input_data, region.width, region);
     const destination = try zpp.makeDest(f32, &output_data, region.width, region);
@@ -276,7 +276,7 @@ test "Zip: Unzip split source correctly" {
     th.fillRamp(f32, &input_a, 1, 1);
     var input_b: [8]f32 = undefined;
     th.fillRamp(f32, &input_b, 10, 10);
-    var output_data = [_]f32{0} ** 8;
+    var output_data: [8]f32 = @splat(0);
 
     const source_a = try zpp.makeSource(f32, &input_a, region.width, region);
     const source_b = try zpp.makeSource(f32, &input_b, region.width, region);
@@ -300,8 +300,8 @@ test "Zip: direct process preserves mixed integer channel types" {
 
     const input_a: [8]u8 = .{ 1, 2, 3, 4, 5, 6, 7, 8 };
     const input_b: [8]u16 = .{ 10, 20, 30, 40, 50, 60, 70, 80 };
-    var output_a = [_]u8{0} ** 8;
-    var output_b = [_]u16{0} ** 8;
+    var output_a: [8]u8 = @splat(0);
+    var output_b: [8]u16 = @splat(0);
 
     const source_a = try zpp.makeSource(u8, &input_a, region.width, region);
     const source_b = try zpp.makeSource(u16, &input_b, region.width, region);
@@ -319,8 +319,8 @@ test "Zip: unzip preserves non-f32 channel types" {
 
     const input_a: [8]u8 = .{ 8, 7, 6, 5, 4, 3, 2, 1 };
     const input_b: [8]u16 = .{ 100, 200, 300, 400, 500, 600, 700, 800 };
-    var output_a = [_]u8{0} ** 8;
-    var output_b = [_]u16{0} ** 8;
+    var output_a: [8]u8 = @splat(0);
+    var output_b: [8]u16 = @splat(0);
 
     const source_a = try zpp.makeSource(u8, &input_a, region.width, region);
     const source_b = try zpp.makeSource(u16, &input_b, region.width, region);
@@ -338,7 +338,7 @@ test "Zip: loop can consume mixed integer channel types" {
 
     const input_a: [8]u8 = .{ 1, 2, 3, 4, 5, 6, 7, 8 };
     const input_b: [8]u16 = .{ 10, 20, 30, 40, 50, 60, 70, 80 };
-    var output = [_]u16{0} ** 8;
+    var output: [8]u16 = @splat(0);
 
     const source_a = try zpp.makeSource(u8, &input_a, region.width, region);
     const source_b = try zpp.makeSource(u16, &input_b, region.width, region);
@@ -367,7 +367,7 @@ test "Zip: Unzip split source correctly and process" {
     th.fillRamp(f32, &input_a, 1, 1);
     var input_b: [8]f32 = undefined;
     th.fillRamp(f32, &input_b, 10, 10);
-    var output_data = [_]f32{0} ** 8;
+    var output_data: [8]f32 = @splat(0);
 
     const source_a = try zpp.makeSource(f32, &input_a, region.width, region);
     const source_b = try zpp.makeSource(f32, &input_b, region.width, region);
@@ -399,8 +399,8 @@ test "Zip: unzip preserves region dimensions" {
     const region_a: zpp.Region = .{ .x = 0, .y = 0, .width = 8, .height = 4 };
     const region_b: zpp.Region = .{ .x = 2, .y = 1, .width = 6, .height = 3 };
 
-    var data_a = [_]f32{0} ** 32;
-    var data_b = [_]f32{0} ** 32;
+    var data_a: [32]f32 = @splat(0);
+    var data_b: [32]f32 = @splat(0);
 
     const source_a = try zpp.makeSource(f32, &data_a, region_a.width, region_a);
     const source_b = try zpp.makeSource(f32, &data_b, 8, region_b);
@@ -444,7 +444,7 @@ test "Zip: margined loop over wide sources matches scalar reference" {
         input_a[i] = @floatFromInt(i);
         input_b[i] = @floatFromInt(10000 + i);
     }
-    var output = [_]f32{0} ** (width * height);
+    var output: [width * height]f32 = @splat(0);
 
     const source_a = try zpp.makeSource(f32, &input_a, width, region);
     const source_b = try zpp.makeSource(f32, &input_b, width, region);

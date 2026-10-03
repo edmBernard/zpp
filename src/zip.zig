@@ -10,28 +10,23 @@ const Region = @import("region.zig").Region;
 
 /// Helper to create a tuple type from an array of types
 pub fn SourceTuple(comptime Types: []const type) type {
-    return std.meta.Tuple(Types);
+    return @Tuple(Types);
 }
 
 /// Helper to create a tuple type of N identical types
 pub fn VecTuple(comptime count: comptime_int, comptime VecT: type) type {
-    return std.meta.Tuple(&([1]type{VecT} ** count));
+    const types: [count]type = @splat(VecT);
+    return @Tuple(&types);
 }
 
 /// Helper to extract source types from a tuple type as an array
 pub fn sourceTypesFromTuple(comptime TupleType: type) [tupleLen(TupleType)]type {
-    const type_info = @typeInfo(TupleType);
-    const fields = type_info.@"struct".fields;
-    var types: [fields.len]type = undefined;
-    for (fields, 0..) |field, i| {
-        types[i] = field.type;
-    }
-    return types;
+    return @typeInfo(TupleType).@"struct".field_types[0..tupleLen(TupleType)].*;
 }
 
 /// Helper to get the length of a tuple type
 pub fn tupleLen(comptime TupleType: type) comptime_int {
-    return @typeInfo(TupleType).@"struct".fields.len;
+    return @typeInfo(TupleType).@"struct".field_types.len;
 }
 
 fn innerVectorLen(comptime T: type) ?comptime_int {
@@ -43,8 +38,8 @@ fn innerVectorLen(comptime T: type) ?comptime_int {
             }
         },
         .@"struct" => |info| {
-            if (info.is_tuple and info.fields.len > 0) {
-                return innerVectorLen(info.fields[0].type);
+            if (info.is_tuple and info.field_types.len > 0) {
+                return innerVectorLen(info.field_types[0]);
             }
         },
         else => {},
@@ -72,7 +67,7 @@ fn SourceValueTupleType(comptime SourceTypes: anytype, comptime vec_len: comptim
     inline for (SourceTypes, 0..) |SourceType, i| {
         types[i] = sources.SourceValueType(SourceType, vec_len);
     }
-    return std.meta.Tuple(&types);
+    return @Tuple(&types);
 }
 
 fn AccessorVecType(comptime SourceType: type, comptime BaseVecT: type) type {
@@ -241,7 +236,7 @@ pub fn zip(input_sources: anytype) ZipSource(tupleLen(@TypeOf(input_sources)), s
         @compileError("Zip requires a tuple of sources");
     }
 
-    const field_count = type_info.@"struct".fields.len;
+    const field_count = type_info.@"struct".field_types.len;
     if (field_count < 2) {
         @compileError("Zip requires at least 2 sources");
     }
@@ -294,7 +289,7 @@ pub fn zipDest(dests: anytype) ZipDest(tupleLen(@TypeOf(dests)), sourceTypesFrom
         @compileError("ZipOut requires a tuple of destinations");
     }
 
-    const field_count = type_info.@"struct".fields.len;
+    const field_count = type_info.@"struct".field_types.len;
     if (field_count < 2) {
         @compileError("ZipOut requires at least 2 destinations");
     }
@@ -319,11 +314,11 @@ pub fn zipDest(dests: anytype) ZipDest(tupleLen(@TypeOf(dests)), sourceTypesFrom
 /// This allows individual processing of zipped channels.
 pub fn UnzipSource(comptime ZippedSource: type, comptime channel: usize) type {
     // Get the type of the nested source at this channel index
-    const SourceTypes = @typeInfo(ZippedSource.Sources).@"struct".fields;
+    const SourceTypes = @typeInfo(ZippedSource.Sources).@"struct".field_types;
     if (channel >= SourceTypes.len) {
         @compileError("Unzip channel index out of bounds");
     }
-    const NestedSourceType = SourceTypes[channel].type;
+    const NestedSourceType = SourceTypes[channel];
 
     // Derive vector length from the zipped source
     const vec_len = ZippedSource.vector_length;
@@ -358,7 +353,7 @@ fn UnzipResultType(comptime ZippedType: type) type {
     inline for (0..source_count) |i| {
         types[i] = UnzipSource(ZippedType, i);
     }
-    return std.meta.Tuple(&types);
+    return @Tuple(&types);
 }
 
 /// Unzip a zipped source into its component sources.
@@ -386,7 +381,7 @@ pub fn unzip(zipped: anytype) UnzipResultType(@TypeOf(zipped)) {
 /// nested source supports it (interior fast path).
 pub fn ZipAccessor(comptime SrcType: type, comptime VecT: type, comptime bounds: sources.BoundsCheck) type {
     const source_count = SrcType.count;
-    const SourceTypes = @typeInfo(SrcType.Sources).@"struct".fields;
+    const SourceTypes = @typeInfo(SrcType.Sources).@"struct".field_types;
     const ResultTuple = SourceValueTupleType(sourceTypesFromTuple(SrcType.Sources), @typeInfo(VecT).vector.len);
     const InputAccessorGeneric = @import("loop.zig").InputAccessorGeneric;
 
@@ -404,7 +399,7 @@ pub fn ZipAccessor(comptime SrcType: type, comptime VecT: type, comptime bounds:
         pub inline fn getAt(self: Self, dx: i32, dy: i32) ResultTuple {
             var result: ResultTuple = undefined;
             inline for (0..source_count) |i| {
-                const SourceT = SourceTypes[i].type;
+                const SourceT = SourceTypes[i];
                 const Accessor = InputAccessorGeneric(SourceT, AccessorVecType(SourceT, VecT), bounds, null);
                 const accessor = Accessor{
                     .source = self.source.sources[i],

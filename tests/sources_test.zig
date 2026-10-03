@@ -19,10 +19,10 @@ test "Source: Naked In source reads correct values" {
     inline for (AllTypes) |DataType| {
         const ScalarType = @typeInfo(DataType).vector.child;
 
-        var output_data = [_]ScalarType{0} ** 4;
+        var output_data: [4]ScalarType = @splat(0);
         const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);
 
-        var source_data = [_]ScalarType{0} ** 4;
+        var source_data: [4]ScalarType = @splat(0);
         th.fillRamp(ScalarType, &source_data, 1, 3);
         const source = try zpp.makeSource(ScalarType, &source_data, region.width, region);
 
@@ -39,10 +39,10 @@ test "Source: Naked In source reads correct values: larger and odd region" {
     inline for (AllTypes) |DataType| {
         const ScalarType = @typeInfo(DataType).vector.child;
 
-        var output_data = [_]ScalarType{0} ** 15;
+        var output_data: [15]ScalarType = @splat(0);
         const destination = try zpp.makeDest(ScalarType, &output_data, region.width, region);
 
-        var source_data = [_]ScalarType{0} ** 15;
+        var source_data: [15]ScalarType = @splat(0);
         th.fillRamp(ScalarType, &source_data, 1, 3);
         const source = try zpp.makeSource(ScalarType, &source_data, region.width, region);
 
@@ -62,11 +62,11 @@ test "Source: Only fill requested region: Same global size, different regions" {
     inline for (AllTypes) |DataType| {
         const ScalarType = @typeInfo(DataType).vector.child;
 
-        var source_data = [_]ScalarType{0} ** 45;
+        var source_data: [45]ScalarType = @splat(0);
         th.fillRamp(ScalarType, &source_data, 1, 1);
         const source = try zpp.makeSource(ScalarType, &source_data, input_region.width, input_region);
 
-        var output_data = [_]ScalarType{0} ** 45;
+        var output_data: [45]ScalarType = @splat(0);
         const destination = try zpp.makeDest(ScalarType, &output_data, output_stride, output_region);
 
         zpp.process(source, destination);
@@ -96,11 +96,11 @@ test "Source: Only fill requested region: Same global size, different regions, p
     inline for (AllTypes) |DataType| {
         const ScalarType = @typeInfo(DataType).vector.child;
 
-        var source_data = [_]ScalarType{0} ** (image_width * image_height);
+        var source_data: [image_width * image_height]ScalarType = @splat(0);
         th.fillRamp(ScalarType, &source_data, 1, 1);
         const source = try zpp.makeSource(ScalarType, &source_data, input_stride, input_region);
 
-        var output_data = [_]ScalarType{0} ** (image_width * image_height);
+        var output_data: [image_width * image_height]ScalarType = @splat(0);
         const destination = try zpp.makeDest(ScalarType, &output_data, output_stride, output_region);
 
         zpp.process(source, destination);
@@ -203,7 +203,7 @@ test "Source: readVec out-of-bounds with ZeroPadding across types" {
 
 test "Source constructors reject negative region origins" {
     const region: zpp.Region = .{ .x = -1, .y = 0, .width = 2, .height = 2 };
-    var data = [_]f32{0} ** 4;
+    var data: [4]f32 = @splat(0);
 
     try std.testing.expectError(error.NegativeRegionOrigin, zpp.makeSource(f32, &data, 2, region));
     try std.testing.expectError(error.NegativeRegionOrigin, zpp.makeDest(f32, &data, 2, region));
@@ -211,7 +211,7 @@ test "Source constructors reject negative region origins" {
 
 test "Source constructors reject regions wider than the stride" {
     const region: zpp.Region = .{ .x = 1, .y = 0, .width = 4, .height = 1 };
-    var data = [_]f32{0} ** 8;
+    var data: [8]f32 = @splat(0);
 
     try std.testing.expectError(error.StrideTooSmall, zpp.makeSource(f32, &data, 4, region));
     try std.testing.expectError(error.StrideTooSmall, zpp.makeDest(f32, &data, 4, region));
@@ -219,7 +219,7 @@ test "Source constructors reject regions wider than the stride" {
 
 test "Source constructors reject buffers that do not cover the requested region" {
     const region: zpp.Region = .{ .x = 0, .y = 1, .width = 4, .height = 2 };
-    var data = [_]f32{0} ** 7;
+    var data: [7]f32 = @splat(0);
 
     try std.testing.expectError(error.BufferTooSmall, zpp.makeSource(f32, &data, 4, region));
     try std.testing.expectError(error.BufferTooSmall, zpp.makeDest(f32, &data, 4, region));
@@ -227,7 +227,7 @@ test "Source constructors reject buffers that do not cover the requested region"
 
 test "Interleaved destination constructor validates buffer shape" {
     const region: zpp.Region = .{ .x = 1, .y = 1, .width = 3, .height = 2 };
-    var data = [_]u8{0} ** 20;
+    var data: [20]u8 = @splat(0);
 
     try std.testing.expectError(error.BufferTooSmall, zpp.makeInterleavedDest(u8, 3, &data, 4, region));
 }

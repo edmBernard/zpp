@@ -44,7 +44,7 @@ fn RowCache(comptime T: type, comptime max_rows: usize) type {
         pub fn init(allocator: std.mem.Allocator) Self {
             var self = Self{
                 .data = undefined,
-                .image_rows_in_slots = [_]i64{min_i64} ** max_rows,
+                .image_rows_in_slots = @splat(min_i64),
                 .width = 0,
                 .num_rows = 0,
                 .allocator = allocator,
